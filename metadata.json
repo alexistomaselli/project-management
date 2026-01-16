@@ -1,0 +1,7 @@
+{
+  "name": "NovaProject MCP",
+  "description": "A centralized project management platform with a natural language MCP interface for tracking projects, tasks, and history.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
