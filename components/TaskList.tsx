@@ -1,80 +1,104 @@
 
 import React from 'react';
-import { Task, TaskStatus } from '../types';
+import { Task, TaskStatus, Priority } from '../types';
+import { CheckCircle2, Circle, Clock, AlertTriangle, User } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
 }
 
 const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
-  const getStatusStyle = (status: TaskStatus) => {
+  const getStatusIcon = (status: TaskStatus) => {
     switch (status) {
-      case TaskStatus.DONE: return 'bg-emerald-500';
-      case TaskStatus.IN_PROGRESS: return 'bg-blue-500';
-      case TaskStatus.TODO: return 'bg-slate-300';
-      case TaskStatus.BLOCKED: return 'bg-rose-500';
-      default: return 'bg-gray-400';
+      case 'done': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+      case 'in_progress': return <Clock className="w-5 h-5 text-amber-500" />;
+      case 'review': return <Clock className="w-5 h-5 text-indigo-500" />;
+      case 'todo': return <Circle className="w-5 h-5 text-slate-300" />;
+      default: return null;
+    }
+  };
+
+  const getPriorityBadge = (priority: Priority) => {
+    switch (priority) {
+      case 'urgent': return 'bg-rose-100 text-rose-700 border-rose-200';
+      case 'high': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'medium': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'low': return 'bg-slate-100 text-slate-700 border-slate-200';
+      default: return '';
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Active Tasks</h2>
-        <div className="flex gap-2">
-          <div className="relative">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input 
-              type="text" 
-              placeholder="Filter tasks..." 
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64"
-            />
-          </div>
+    <div className="space-y-6 animate-fadeIn">
+      <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Issue / Tarea</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Prioridad</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Responsable</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Fecha</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {tasks.map((task) => (
+                <tr key={task.id} className="hover:bg-slate-50/50 transition-all group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      {getStatusIcon(task.status)}
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                          {task.title}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400 mt-1 uppercase tracking-tighter">
+                          ID: {task.id.slice(0, 8)}...
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider border ${getPriorityBadge(task.priority)}`}>
+                      {task.priority || 'medium'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border-2 border-white shadow-sm">
+                        <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${task.assignee || 'Un'}`} alt="avatar" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-600">{task.assignee || 'Sin asignar'}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-xs font-bold text-slate-400">
+                    {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Próximamente'}
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${task.status === 'done' ? 'bg-emerald-500' :
+                          task.status === 'in_progress' ? 'bg-amber-500' :
+                            task.status === 'review' ? 'bg-indigo-500' : 'bg-slate-300'
+                        }`}></span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                        {task.status}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 text-sm font-bold text-slate-600 uppercase tracking-wider">Task</th>
-              <th className="px-6 py-4 text-sm font-bold text-slate-600 uppercase tracking-wider">Project ID</th>
-              <th className="px-6 py-4 text-sm font-bold text-slate-600 uppercase tracking-wider">Assignee</th>
-              <th className="px-6 py-4 text-sm font-bold text-slate-600 uppercase tracking-wider">Due Date</th>
-              <th className="px-6 py-4 text-sm font-bold text-slate-600 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {tasks.map((task) => (
-              <tr key={task.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${getStatusStyle(task.status)}`}></div>
-                    <span className="font-semibold">{task.title}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-500 uppercase font-mono">{task.projectId}</td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <img src={`https://picsum.photos/seed/${task.assignee}/32/32`} className="w-6 h-6 rounded-full" alt="" />
-                    <span className="text-sm font-medium">{task.assignee}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-500">{task.dueDate}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase ${
-                    task.status === TaskStatus.DONE ? 'bg-emerald-100 text-emerald-700' :
-                    task.status === TaskStatus.IN_PROGRESS ? 'bg-blue-100 text-blue-700' :
-                    'bg-slate-100 text-slate-600'
-                  }`}>
-                    {task.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {tasks.length === 0 && (
+        <div className="flex flex-col items-center justify-center p-20 bg-white border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
+          <AlertTriangle className="w-12 h-12 mb-4 opacity-20" />
+          <p className="font-bold">No hay issues registrados.</p>
+          <p className="text-sm">Todo está en orden.</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,32 +1,26 @@
 
-export enum ProjectStatus {
-  ACTIVE = 'Active',
-  COMPLETED = 'Completed',
-  ON_HOLD = 'On Hold',
-  PLANNING = 'Planning'
-}
-
-export enum TaskStatus {
-  TODO = 'To Do',
-  IN_PROGRESS = 'In Progress',
-  DONE = 'Done',
-  BLOCKED = 'Blocked'
-}
+export type ProjectStatus = 'active' | 'archived' | 'on_hold';
+export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
+export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Project {
   id: string;
   name: string;
   description: string;
   status: ProjectStatus;
-  deadline: string;
+  repository_url?: string;
   progress: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Task {
   id: string;
   projectId: string;
   title: string;
+  description?: string;
   status: TaskStatus;
+  priority: Priority;
   assignee: string;
   dueDate: string;
 }

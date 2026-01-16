@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Project, ProjectStatus } from '../types';
+import { Layers, MoreVertical, Calendar, Globe } from 'lucide-react';
 
 interface ProjectListProps {
   projects: Project[];
@@ -9,66 +10,72 @@ interface ProjectListProps {
 const ProjectList: React.FC<ProjectListProps> = ({ projects }) => {
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
-      case ProjectStatus.ACTIVE: return 'bg-blue-100 text-blue-700 border-blue-200';
-      case ProjectStatus.COMPLETED: return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case ProjectStatus.ON_HOLD: return 'bg-amber-100 text-amber-700 border-amber-200';
-      case ProjectStatus.PLANNING: return 'bg-slate-100 text-slate-700 border-slate-200';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'active': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+      case 'on_hold': return 'bg-amber-50 text-amber-700 border-amber-100';
+      case 'archived': return 'bg-slate-50 text-slate-700 border-slate-100';
+      default: return 'bg-gray-50 text-gray-700';
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Projects</h2>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2">
-          <i className="fa-solid fa-plus"></i> New Project
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="space-y-8 animate-fadeIn">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {projects.map((project) => (
-          <div key={project.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all group">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(project.status)}`}>
+          <div key={project.id} className="glass-card hover-glow overflow-hidden group border-slate-100 bg-white">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getStatusColor(project.status)}`}>
                   {project.status}
-                </span>
-                <button className="text-slate-400 hover:text-slate-600">
-                  <i className="fa-solid fa-ellipsis-vertical"></i>
+                </div>
+                <button className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <MoreVertical className="w-5 h-5" />
                 </button>
               </div>
-              <h3 className="text-lg font-bold group-hover:text-blue-600 transition-colors mb-2">{project.name}</h3>
-              <p className="text-slate-500 text-sm line-clamp-2 mb-6 h-10">{project.description}</p>
-              
-              <div className="space-y-4">
+
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                  {project.name}
+                </h3>
+              </div>
+
+              <p className="text-slate-500 text-sm leading-relaxed mb-8 line-clamp-2 h-10">
+                {project.description || 'Sin descripción disponible.'}
+              </p>
+
+              <div className="space-y-6">
                 <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-slate-500 font-medium">Progress</span>
-                    <span className="font-bold">{project.progress}%</span>
+                  <div className="flex items-center justify-between text-xs mb-3">
+                    <span className="text-slate-400 font-bold uppercase tracking-tight">Progreso del Backend</span>
+                    <span className="font-extrabold text-slate-900">{project.progress}%</span>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-600 rounded-full" 
+                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5">
+                    <div
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
                       style={{ width: `${project.progress}%` }}
                     ></div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-2 text-slate-500 text-sm">
-                    <i className="fa-regular fa-calendar-check"></i>
-                    <span>{project.deadline}</span>
+                <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
+                    <Globe className="w-4 h-4" />
+                    <span className="truncate max-w-[120px]">{project.repository_url ? 'GitHub Repo' : 'No Repo'}</span>
                   </div>
-                  <div className="flex -space-x-2">
-                    {[1, 2, 3].map(i => (
-                      <img 
+                  <div className="flex -space-x-3">
+                    {[1, 2].map(i => (
+                      <div
                         key={i}
-                        src={`https://picsum.photos/seed/${project.id}${i}/40/40`} 
-                        className="w-8 h-8 rounded-full border-2 border-white"
-                        alt="Assignee"
-                      />
+                        className="w-10 h-10 rounded-2xl border-4 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 overflow-hidden"
+                      >
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Alex${i}`} alt="user" />
+                      </div>
                     ))}
+                    <div className="w-10 h-10 rounded-2xl border-4 border-white bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600">
+                      +
+                    </div>
                   </div>
                 </div>
               </div>
@@ -76,6 +83,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects }) => {
           </div>
         ))}
       </div>
+
+      {projects.length === 0 && (
+        <div className="flex flex-col items-center justify-center p-20 bg-white border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
+          <Layers className="w-12 h-12 mb-4 opacity-20" />
+          <p className="font-bold">No hay proyectos activos.</p>
+          <p className="text-sm">Usa el comando "add_project" en el chat MCP para empezar.</p>
+        </div>
+      )}
     </div>
   );
 };
