@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -39,8 +40,16 @@ const App: React.FC = () => {
       const { data: projData } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
       const { data: taskData } = await supabase.from('issues').select('*').order('created_at', { ascending: false });
       const { data: actData } = await supabase.from('activities').select('*, projects(name)').order('created_at', { ascending: false });
+      const { data: commData } = await supabase.from('comments').select('*').order('created_at', { ascending: true });
 
       if (projData) setProjects(projData as any);
+      if (commData) setComments(commData.map(c => ({
+        id: c.id,
+        issueId: c.issue_id,
+        authorName: c.author_name,
+        content: c.content,
+        createdAt: c.created_at
+      })));
       if (taskData) {
         // Map issues to tasks type if necessary, here we assume they match enough
         setTasks(taskData.map(t => ({
@@ -204,7 +213,9 @@ const App: React.FC = () => {
                 <TaskDetail
                   task={tasks.find(t => t.id === selectedTaskId)!}
                   project={projects.find(p => p.id === tasks.find(t => t.id === selectedTaskId)?.projectId)}
+                  comments={comments}
                   onBack={() => setSelectedTaskId(null)}
+                  onRefresh={fetchData}
                 />
               ) : (
                 <>

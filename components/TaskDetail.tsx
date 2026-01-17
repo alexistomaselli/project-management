@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Task, Project } from '../types';
+import { Task, Project, Comment } from '../types';
+import { supabase } from '../services/supabase';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -20,10 +21,43 @@ import {
 interface TaskDetailProps {
     task: Task;
     project?: Project;
+    comments: Comment[];
     onBack: () => void;
+    onRefresh: () => void;
 }
 
-const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, onBack }) => {
+const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack, onRefresh }) => {
+    const [newComment, setNewComment] = React.useState('');
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    const taskComments = comments.filter(c => c.issueId === task.id);
+
+    const handleAddComment = async () => {
+        if (!newComment.trim()) return;
+        setIsSubmitting(true);
+        try {
+            await supabase.from('comments').insert([{
+                issue_id: task.id,
+                author_name: 'Alexis Tomaselli', // In a real app, this would come from auth
+                content: newComment.trim()
+            }]);
+
+            // Log activity
+            await supabase.from('activities').insert([{
+                project_id: task.projectId,
+                issue_id: task.id,
+                action: 'commented',
+                details: { comment: newComment.trim().slice(0, 50) }
+            }]);
+
+            setNewComment('');
+            onRefresh();
+        } catch (error) {
+            console.error('Error adding comment:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
     const getStatusStyle = (status: string) => {
         switch (status) {
             case 'open': return 'bg-sky-50 text-sky-700 border-sky-100';
@@ -118,15 +152,42 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, onBack }) => {
                         </h3>
 
                         <div className="space-y-8">
-                            <div className="flex gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">AT</div>
-                                <div className="bg-slate-50 p-6 rounded-3xl flex-1 border border-slate-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="font-bold text-slate-900">Alexis Tomaselli</span>
-                                        <span className="text-xs text-slate-400">Hace 2 horas</span>
+                            {taskComments.length > 0 ? taskComments.map((comment) => (
+                                <div key={comment.id} className="flex gap-4 animate-slide-up">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">
+                                        {comment.authorName.split(' ').map(n => n[0]).join('')}
                                     </div>
-                                    <p className="text-slate-600 leading-relaxed">Trabajando en el fix de este issue. El problema parece estar en la respuesta del webhook de Supabase.</p>
+                                    <div className="bg-slate-50 p-6 rounded-3xl flex-1 border border-slate-100">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-bold text-slate-900">{comment.authorName}</span>
+                                            <span className="text-xs text-slate-400">{new Date(comment.createdAt).toLocaleTimeString()}</span>
+                                        </div>
+                                        <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
+                                    </div>
                                 </div>
+                            )) : (
+                                <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
+                                    <p className="text-sm font-bold">No hay comentarios aún.</p>
+                                    <p className="text-[10px] uppercase tracking-widest mt-1">Sé el primero en comentar</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-8 pt-8 border-t border-slate-100">
+                            <div className="relative">
+                                <textarea
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="Escribe un comentario técnico o actualización..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all min-h-[120px] resize-none"
+                                />
+                                <button
+                                    onClick={handleAddComment}
+                                    disabled={isSubmitting || !newComment.trim()}
+                                    className="absolute bottom-4 right-4 bg-indigo-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200"
+                                >
+                                    {isSubmitting ? 'Enviando...' : 'Enviar Comentario'}
+                                </button>
                             </div>
                         </div>
                     </div>

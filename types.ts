@@ -25,6 +25,14 @@ export interface Task {
   dueDate: string;
 }
 
+export interface Comment {
+  id: string;
+  issueId: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface Activity {
   id: string;
   projectId: string;
