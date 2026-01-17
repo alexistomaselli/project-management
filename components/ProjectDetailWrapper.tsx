@@ -2,15 +2,23 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ProjectDetail from './ProjectDetail';
-import { Project, Task, Activity } from '../types';
+import { Project, Task, Activity, Priority } from '../types';
 
 interface ProjectDetailWrapperProps {
     projects: Project[];
     tasks: Task[];
     activities: Activity[];
+    onDeleteProject: (id: string) => void;
+    onCreateIssue: (projectId: string, title: string, description: string, priority: Priority, assignees: string[], dueDate: string) => void;
 }
 
-const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({ projects, tasks, activities }) => {
+const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
+    projects,
+    tasks,
+    activities,
+    onDeleteProject,
+    onCreateIssue
+}) => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const project = projects.find((p) => p.id === projectId);
@@ -36,6 +44,8 @@ const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({ projects, t
             activities={activities}
             onBack={() => navigate('/projects')}
             onSelectTask={(taskId) => navigate(`/tasks/${taskId}`)}
+            onDelete={() => onDeleteProject(project.id)}
+            onCreateIssue={onCreateIssue}
         />
     );
 };

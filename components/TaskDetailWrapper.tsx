@@ -2,16 +2,18 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TaskDetail from './TaskDetail';
-import { Project, Task } from '../types';
+import { Project, Task, TaskStatus, Activity } from '../types';
 
 interface TaskDetailWrapperProps {
     tasks: Task[];
     projects: Project[];
     comments: any[];
+    activities: Activity[];
     onRefresh: () => void;
+    onUpdateStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
 }
 
-const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, comments, onRefresh }) => {
+const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, comments, activities, onRefresh, onUpdateStatus }) => {
     const { taskId } = useParams<{ taskId: string }>();
     const navigate = useNavigate();
     const task = tasks.find((t) => t.id === taskId);
@@ -36,8 +38,10 @@ const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, 
             task={task}
             project={project}
             comments={comments}
+            activities={activities}
             onBack={() => navigate(-1)}
             onRefresh={onRefresh}
+            onUpdateStatus={onUpdateStatus}
         />
     );
 };

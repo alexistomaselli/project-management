@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Task, Project, Comment, TaskStatus } from '../types';
+import { Task, Project, Comment, TaskStatus, Activity } from '../types';
 import { supabase } from '../services/supabase';
 import {
     ArrowLeft,
@@ -15,22 +15,36 @@ import {
     MoreVertical,
     Paperclip,
     Share2,
-    Layers
+    Layers,
+    Circle,
+    Loader2
 } from 'lucide-react';
 
 interface TaskDetailProps {
     task: Task;
     project?: Project;
     comments: Comment[];
+    activities: Activity[];
     onBack: () => void;
     onRefresh: () => void;
+    onUpdateStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
 }
 
-const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack, onRefresh }) => {
+const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activities, onBack, onRefresh, onUpdateStatus }) => {
     const [newComment, setNewComment] = React.useState('');
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [isEditing, setIsEditing] = React.useState(false);
+    const [editedTitle, setEditedTitle] = React.useState(task.title);
+    const [editedDescription, setEditedDescription] = React.useState(task.description || '');
 
     const taskComments = comments.filter(c => c.issueId === task.id);
+    const taskActivities = activities.filter(a => a.issueId === task.id);
+
+    // Merge comments and activities for a unified timeline
+    const timelineItems = [
+        ...taskComments.map(c => ({ type: 'comment' as const, date: new Date(c.createdAt), data: c })),
+        ...taskActivities.map(a => ({ type: 'activity' as const, date: new Date(a.timestamp), data: a }))
+    ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
     const handleAddComment = async () => {
         if (!newComment.trim()) return;
@@ -60,12 +74,15 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
     };
     const commentAreaRef = React.useRef<HTMLDivElement>(null);
 
-    const handleUpdateStatus = async (newStatus: TaskStatus) => {
+    const handleUpdateTask = async () => {
         setIsSubmitting(true);
         try {
             const { error } = await supabase
                 .from('issues')
-                .update({ status: newStatus })
+                .update({
+                    title: editedTitle.trim(),
+                    description: editedDescription.trim()
+                })
                 .eq('id', task.id);
 
             if (error) throw error;
@@ -74,10 +91,26 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
             await supabase.from('activities').insert([{
                 project_id: task.projectId,
                 issue_id: task.id,
-                action: 'status_updated',
-                details: { title: task.title, new_status: newStatus }
+                action: 'task_updated',
+                details: {
+                    title: editedTitle.trim(),
+                    changes: 'Título o descripción editados'
+                }
             }]);
 
+            setIsEditing(false);
+            onRefresh();
+        } catch (error) {
+            console.error('Error updating task:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleUpdateStatus = async (newStatus: TaskStatus) => {
+        setIsSubmitting(true);
+        try {
+            await onUpdateStatus(task.id, newStatus);
             onRefresh();
         } catch (error) {
             console.error('Error updating status:', error);
@@ -149,51 +182,103 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
                             </div>
                         </div>
 
-                        <h2 className="text-4xl font-extrabold text-slate-900 mb-6 leading-tight">
-                            {task.title}
-                        </h2>
+                        {isEditing ? (
+                            <div className="space-y-4 mb-8">
+                                <input
+                                    type="text"
+                                    value={editedTitle}
+                                    onChange={(e) => setEditedTitle(e.target.value)}
+                                    className="w-full text-4xl font-extrabold text-slate-900 leading-tight border-b-2 border-indigo-600 outline-none bg-transparent"
+                                />
+                                <textarea
+                                    value={editedDescription}
+                                    onChange={(e) => setEditedDescription(e.target.value)}
+                                    className="w-full text-slate-600 text-lg leading-relaxed min-h-[150px] p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500"
+                                    placeholder="Descripción del issue..."
+                                />
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={handleUpdateTask}
+                                        disabled={isSubmitting}
+                                        className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2"
+                                    >
+                                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                        Guardar Cambios
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setIsEditing(false);
+                                            setEditedTitle(task.title);
+                                            setEditedDescription(task.description || '');
+                                        }}
+                                        className="text-slate-500 font-bold hover:text-slate-800"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-4xl font-extrabold text-slate-900 leading-tight">
+                                        {task.title}
+                                    </h2>
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="text-indigo-600 text-xs font-black uppercase tracking-widest hover:underline"
+                                    >
+                                        Editar
+                                    </button>
+                                </div>
 
-                        <div className="prose prose-slate max-w-none mb-10">
-                            <p className="text-slate-600 text-lg leading-relaxed whitespace-pre-wrap">
-                                {task.description || 'No hay una descripción detallada para este issue.'}
-                            </p>
-                            {!task.description && (
-                                <>
-                                    <h4 className="font-bold text-slate-800 mt-6 mb-3">Recomendaciones:</h4>
-                                    <p className="text-slate-500 text-sm italic">
-                                        Considera usar el asistente MCP para agregar más contexto a este issue.
+                                <div className="prose prose-slate max-w-none mb-10">
+                                    <p className="text-slate-600 text-lg leading-relaxed whitespace-pre-wrap">
+                                        {task.description || 'No hay una descripción detallada para este issue.'}
                                     </p>
-                                </>
-                            )}
-                        </div>
+                                    {!task.description && (
+                                        <>
+                                            <h4 className="font-bold text-slate-800 mt-6 mb-3">Recomendaciones:</h4>
+                                            <p className="text-slate-500 text-sm italic">
+                                                Considera usar el asistente MCP para agregar más contexto a este issue.
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
+                            </>
+                        )}
 
-                        <div className="flex items-center gap-4 pt-8 border-t border-slate-50">
-                            {task.status !== 'done' ? (
+                        <div className="space-y-4 pt-8 border-t border-slate-50">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cambiar Estado</p>
+                            <div className="flex flex-wrap items-center gap-3">
+                                {[
+                                    { id: 'todo', label: 'Por Hacer', icon: Circle, color: 'hover:border-slate-300 hover:bg-slate-50 text-slate-600', active: 'bg-slate-100 border-slate-300 text-slate-900 shadow-sm' },
+                                    { id: 'in_progress', label: 'En Progreso', icon: Clock, color: 'hover:border-amber-200 hover:bg-amber-50 text-amber-600', active: 'bg-amber-100 border-amber-300 text-amber-900 shadow-sm' },
+                                    { id: 'review', label: 'En Revisión', icon: AlertCircle, color: 'hover:border-indigo-200 hover:bg-indigo-50 text-indigo-600', active: 'bg-indigo-100 border-indigo-300 text-indigo-900 shadow-sm' },
+                                    { id: 'done', label: 'Completado', icon: CheckCircle2, color: 'hover:border-emerald-200 hover:bg-emerald-50 text-emerald-600', active: 'bg-emerald-100 border-emerald-300 text-emerald-900 shadow-sm' },
+                                ].map((status) => (
+                                    <button
+                                        key={status.id}
+                                        onClick={() => handleUpdateStatus(status.id as TaskStatus)}
+                                        disabled={isSubmitting}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-sm border transition-all disabled:opacity-50 ${task.status === status.id ? status.active : `bg-white border-slate-100 ${status.color}`
+                                            }`}
+                                    >
+                                        <status.icon className="w-4 h-4" />
+                                        <span>{status.label}</span>
+                                        {task.status === status.id && <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse ml-1" />}
+                                    </button>
+                                ))}
+
+                                <div className="h-8 w-[1px] bg-slate-100 mx-2" />
+
                                 <button
-                                    onClick={() => handleUpdateStatus('done')}
-                                    disabled={isSubmitting}
-                                    className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-100 disabled:opacity-50"
+                                    onClick={scrollToComments}
+                                    className="flex items-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-2xl font-bold text-sm transition-all hover:bg-slate-50"
                                 >
-                                    <CheckCircle2 className="w-5 h-5" />
-                                    <span>{isSubmitting ? 'Actualizando...' : 'Marcar como Completada'}</span>
+                                    <MessageSquare className="w-4 h-4" />
+                                    <span>Comentar</span>
                                 </button>
-                            ) : (
-                                <button
-                                    onClick={() => handleUpdateStatus('todo')}
-                                    disabled={isSubmitting}
-                                    className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-6 py-3 rounded-2xl font-bold transition-all hover:bg-emerald-100 border border-emerald-100 disabled:opacity-50"
-                                >
-                                    <Clock className="w-5 h-5" />
-                                    <span>Re-abrir Tarea</span>
-                                </button>
-                            )}
-                            <button
-                                onClick={scrollToComments}
-                                className="flex items-center gap-2 border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold transition-all hover:bg-slate-50"
-                            >
-                                <MessageSquare className="w-5 h-5" />
-                                <span>Agregar Comentario</span>
-                            </button>
+                            </div>
                         </div>
                     </div>
 
@@ -204,24 +289,51 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
                         </h3>
 
 
-                        <div className="space-y-8">
-                            {taskComments.length > 0 ? taskComments.map((comment) => (
-                                <div key={comment.id} className="flex gap-4 animate-slide-up">
-                                    <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">
-                                        {comment.authorName.split(' ').map(n => n[0]).join('')}
-                                    </div>
-                                    <div className="bg-slate-50 p-6 rounded-3xl flex-1 border border-slate-100">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="font-bold text-slate-900">{comment.authorName}</span>
-                                            <span className="text-xs text-slate-400">{new Date(comment.createdAt).toLocaleTimeString()}</span>
+                        <div className="space-y-6">
+                            {timelineItems.length > 0 ? timelineItems.map((item, idx) => (
+                                item.type === 'comment' ? (
+                                    <div key={`comment-${item.data.id}`} className="flex gap-4 animate-slide-up">
+                                        <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">
+                                            {item.data.authorName.split(' ').map(n => n[0]).join('')}
                                         </div>
-                                        <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
+                                        <div className="bg-slate-50 p-6 rounded-3xl flex-1 border border-slate-100">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-bold text-slate-900">{item.data.authorName}</span>
+                                                <span className="text-xs text-slate-400">{item.date.toLocaleString()}</span>
+                                            </div>
+                                            <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{item.data.content}</p>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div key={`activity-${item.data.id}`} className="flex gap-4 items-center animate-slide-up pl-4 py-2 border-l-2 border-slate-100 ml-5">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm ${item.data.action === 'status_updated' ? 'bg-amber-100 text-amber-600' :
+                                            item.data.action === 'commented' ? 'bg-blue-100 text-blue-600' :
+                                                'bg-indigo-100 text-indigo-600'
+                                            }`}>
+                                            {item.data.action === 'status_updated' ? <Clock className="w-4 h-4" /> :
+                                                item.data.action === 'commented' ? <MessageSquare className="w-4 h-4" /> :
+                                                    <AlertCircle className="w-4 h-4" />}
+                                        </div>
+                                        <div className="flex-1 text-sm">
+                                            <span className="font-bold text-slate-700 capitalize">
+                                                {item.data.action.replace('_', ' ')}:
+                                            </span>
+                                            <span className="text-slate-500 ml-2">
+                                                {item.data.action === 'status_updated' && (item.data as any).details?.new_status ?
+                                                    `a ${(item.data as any).details.new_status}` :
+                                                    item.data.action === 'issue_created' ? 'Tarea iniciada' :
+                                                        'Actividad registrada'}
+                                            </span>
+                                            <span className="text-[10px] text-slate-300 ml-3 font-mono">
+                                                {item.date.toLocaleTimeString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
                             )) : (
                                 <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
-                                    <p className="text-sm font-bold">No hay comentarios aún.</p>
-                                    <p className="text-[10px] uppercase tracking-widest mt-1">Sé el primero en comentar</p>
+                                    <p className="text-sm font-bold">No hay trazabilidad registrada.</p>
+                                    <p className="text-[10px] uppercase tracking-widest mt-1">Realiza una acción para iniciar el historial</p>
                                 </div>
                             )}
                         </div>

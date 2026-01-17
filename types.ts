@@ -30,6 +30,7 @@ export interface Task {
   priority: Priority;
   assignees: string[];
   dueDate: string;
+  createdAt: string;
 }
 
 export interface Comment {
@@ -43,10 +44,12 @@ export interface Comment {
 export interface Activity {
   id: string;
   projectId: string;
+  issueId?: string;
   projectName: string;
   action: string;
   timestamp: string;
   user: string;
+  details?: any;
 }
 
 export interface Message {

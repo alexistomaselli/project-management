@@ -76,6 +76,12 @@ const McpChat: React.FC<McpChatProps> = ({
         const title = taskMatch[1];
         const projNamePart = taskMatch[2];
 
+        // Detección de prioridad en el texto
+        let priority: any = 'medium';
+        if (text.toLowerCase().includes('urgente')) priority = 'urgent';
+        else if (text.toLowerCase().includes('alta') || text.toLowerCase().includes('high')) priority = 'high';
+        else if (text.toLowerCase().includes('baja') || text.toLowerCase().includes('low')) priority = 'low';
+
         let projectId = projects[0]?.id; // Default al primero si no se especifica
 
         if (projNamePart) {
@@ -84,16 +90,28 @@ const McpChat: React.FC<McpChatProps> = ({
         }
 
         const { data, error } = await supabase.from('issues').insert([
-          { project_id: projectId, title, description: 'Generado automáticamente vía MCP', status: 'todo', priority: 'medium' }
+          {
+            project_id: projectId,
+            title,
+            description: 'Generado automáticamente vía MCP Interactive',
+            status: 'todo',
+            priority: priority
+          }
         ]).select().single();
 
         if (error) throw error;
 
         await supabase.from('activities').insert([
-          { project_id: projectId, issue_id: data.id, action: 'issue_created', details: { title } }
+          {
+            project_id: projectId,
+            issue_id: data.id,
+            action: 'issue_created',
+            details: { title, priority }
+          }
         ]);
 
-        responseContent = `✅ Tarea "${title}" añadida con éxito. Backlog actualizado.`;
+        const priorityEmoji = priority === 'urgent' ? '🚨' : priority === 'high' ? '🔥' : '✅';
+        responseContent = `${priorityEmoji} Tarea "${title}" añadida con éxito (Prioridad: ${priority}). Backlog de "${projects.find(p => p.id === projectId)?.name}" actualizado.`;
       }
       else if (text.toLowerCase().includes('hola') || text.toLowerCase().includes('saludos')) {
         responseContent = "¡Hola! Soy tu asistente de gestión. Puedo crear proyectos, añadir tareas o darte reportes de estado. ¿Qué necesitas hoy?";
