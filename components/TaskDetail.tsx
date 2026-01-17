@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Task, Project, Comment } from '../types';
+import { Task, Project, Comment, TaskStatus } from '../types';
 import { supabase } from '../services/supabase';
 import {
     ArrowLeft,
@@ -58,11 +58,44 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
             setIsSubmitting(false);
         }
     };
+    const commentAreaRef = React.useRef<HTMLDivElement>(null);
+
+    const handleUpdateStatus = async (newStatus: TaskStatus) => {
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase
+                .from('issues')
+                .update({ status: newStatus })
+                .eq('id', task.id);
+
+            if (error) throw error;
+
+            // Log activity
+            await supabase.from('activities').insert([{
+                project_id: task.projectId,
+                issue_id: task.id,
+                action: 'status_updated',
+                details: { title: task.title, new_status: newStatus }
+            }]);
+
+            onRefresh();
+        } catch (error) {
+            console.error('Error updating status:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const scrollToComments = () => {
+        commentAreaRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
     const getStatusStyle = (status: string) => {
         switch (status) {
-            case 'open': return 'bg-sky-50 text-sky-700 border-sky-100';
-            case 'in_progress': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-            case 'closed': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+            case 'todo': return 'bg-slate-100 text-slate-600 border-slate-200';
+            case 'in_progress': return 'bg-amber-50 text-amber-700 border-amber-100';
+            case 'review': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
+            case 'done': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
             default: return 'bg-slate-50 text-slate-700 border-slate-100';
         }
     };
@@ -72,6 +105,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
             case 'high': return 'text-rose-600 bg-rose-50';
             case 'medium': return 'text-amber-600 bg-amber-50';
             case 'low': return 'text-emerald-600 bg-emerald-50';
+            case 'urgent': return 'text-rose-700 bg-rose-100';
             default: return 'text-slate-600 bg-slate-50';
         }
     };
@@ -134,18 +168,36 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
                         </div>
 
                         <div className="flex items-center gap-4 pt-8 border-t border-slate-50">
-                            <button className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-100">
-                                <CheckCircle2 className="w-5 h-5" />
-                                <span>Marcar como Completada</span>
-                            </button>
-                            <button className="flex items-center gap-2 border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold transition-all hover:bg-slate-50">
+                            {task.status !== 'done' ? (
+                                <button
+                                    onClick={() => handleUpdateStatus('done')}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-100 disabled:opacity-50"
+                                >
+                                    <CheckCircle2 className="w-5 h-5" />
+                                    <span>{isSubmitting ? 'Actualizando...' : 'Marcar como Completada'}</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => handleUpdateStatus('todo')}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-6 py-3 rounded-2xl font-bold transition-all hover:bg-emerald-100 border border-emerald-100 disabled:opacity-50"
+                                >
+                                    <Clock className="w-5 h-5" />
+                                    <span>Re-abrir Tarea</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={scrollToComments}
+                                className="flex items-center gap-2 border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold transition-all hover:bg-slate-50"
+                            >
                                 <MessageSquare className="w-5 h-5" />
                                 <span>Agregar Comentario</span>
                             </button>
                         </div>
                     </div>
 
-                    <div className="glass-card p-10 bg-white border-slate-100">
+                    <div ref={commentAreaRef} className="glass-card p-10 bg-white border-slate-100">
                         <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-3">
                             <MessageSquare className="w-6 h-6 text-indigo-500" />
                             Discusión & Actividad
