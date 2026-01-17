@@ -203,6 +203,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
                             Discusión & Actividad
                         </h3>
 
+
                         <div className="space-y-8">
                             {taskComments.length > 0 ? taskComments.map((comment) => (
                                 <div key={comment.id} className="flex gap-4 animate-slide-up">
@@ -251,7 +252,24 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Detalles Técnicos</h4>
 
                         <div className="space-y-6">
-                            <InfoRow icon={<User />} label="Asignado a" value={task.assignee || 'Sin asignar'} />
+                            <InfoRow
+                                icon={<User />}
+                                label="Asignados"
+                                value={
+                                    <div className="flex flex-col gap-2 mt-2">
+                                        {task.assignees && task.assignees.length > 0 ? (
+                                            task.assignees.map((assignee, idx) => (
+                                                <div key={idx} className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-md overflow-hidden bg-slate-100 border border-slate-200">
+                                                        <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${assignee}`} alt="avatar" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-700">{assignee}</span>
+                                                </div>
+                                            ))
+                                        ) : 'Sin asignar'}
+                                    </div>
+                                }
+                            />
                             <InfoRow
                                 icon={<Flag />}
                                 label="Prioridad"
@@ -287,7 +305,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, onBack
 const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: React.ReactNode }) => (
     <div className="flex items-start gap-4">
         <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
-            {React.cloneElement(icon as React.ReactElement, { className: 'w-4.5 h-4.5' })}
+            {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 18 }) : icon}
         </div>
         <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>

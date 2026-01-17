@@ -25,12 +25,17 @@ import McpChat from './components/McpChat';
 import ProjectDetailWrapper from './components/ProjectDetailWrapper';
 import TaskDetailWrapper from './components/TaskDetailWrapper';
 import DocsView from './components/DocsView';
-import { Project, Task, Activity } from './types';
+import Auth from './components/Auth';
+import { Project, Task, Activity, Profile } from './types';
 import { supabase } from './services/supabase';
+import { Session } from '@supabase/supabase-js';
+import { LogOut, User as UserIcon } from 'lucide-react';
 
 const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -39,6 +44,36 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const activeTab = location.pathname.split('/')[1] || 'dashboard';
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        setProfile({
+          id: session.user.id,
+          email: session.user.email || '',
+          full_name: session.user.user_metadata?.full_name,
+          avatar_url: session.user.user_metadata?.avatar_url
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        setProfile({
+          id: session.user.id,
+          email: session.user.email || '',
+          full_name: session.user.user_metadata?.full_name,
+          avatar_url: session.user.user_metadata?.avatar_url
+        });
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -65,7 +100,7 @@ const App: React.FC = () => {
           description: t.description,
           status: t.status,
           priority: t.priority,
-          assignee: t.assigned_to,
+          assignees: t.assigned_to,
           dueDate: t.due_date
         })) as any);
       }
@@ -100,6 +135,10 @@ const App: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  if (!session) {
+    return <Auth onSuccess={() => fetchData()} />;
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
@@ -226,8 +265,27 @@ const App: React.FC = () => {
                 className="bg-white border border-[#E2E8F0] rounded-2xl pl-10 pr-4 py-2.5 text-sm w-32 md:w-64 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
               />
             </div>
-            <button className="w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-all shadow-sm hover:shadow-md shrink-0">
-              <Bell className="w-5 h-5" />
+
+            <div className="h-11 px-4 bg-white border border-[#E2E8F0] rounded-2xl flex items-center gap-3 shadow-sm shrink-0">
+              <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 border border-indigo-100 overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="avatar" />
+                ) : (
+                  <UserIcon className="w-4 h-4" />
+                )}
+              </div>
+              <div className="hidden sm:block text-left">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">Usuario</p>
+                <p className="text-[11px] font-bold text-slate-700 leading-none truncate max-w-[100px]">{profile?.email.split('@')[0]}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-400 hover:text-rose-600 transition-all shadow-sm hover:shadow-md shrink-0 group"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </button>
             <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 md:px-5 py-2.5 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 shrink-0 whitespace-nowrap">
               <Plus className="w-4 h-4" />

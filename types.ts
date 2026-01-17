@@ -14,6 +14,13 @@ export interface Project {
   updated_at: string;
 }
 
+export interface Profile {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -21,7 +28,7 @@ export interface Task {
   description?: string;
   status: TaskStatus;
   priority: Priority;
-  assignee: string;
+  assignees: string[];
   dueDate: string;
 }
 

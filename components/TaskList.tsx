@@ -70,10 +70,33 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border-2 border-white shadow-sm">
-                        <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${task.assignee || 'Un'}`} alt="avatar" />
+                      <div className="flex -space-x-2 overflow-hidden">
+                        {task.assignees && task.assignees.length > 0 ? (
+                          task.assignees.slice(0, 3).map((assignee, idx) => (
+                            <div
+                              key={idx}
+                              className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border-2 border-white shadow-sm"
+                              title={assignee}
+                            >
+                              <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${assignee}`} alt="avatar" />
+                            </div>
+                          ))
+                        ) : (
+                          <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 border-2 border-dashed border-slate-200">
+                            <User className="w-4 h-4" />
+                          </div>
+                        )}
+                        {task.assignees && task.assignees.length > 3 && (
+                          <div className="w-8 h-8 rounded-xl bg-indigo-50 border-2 border-white flex items-center justify-center text-[10px] font-black text-indigo-600 shadow-sm">
+                            +{task.assignees.length - 3}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-xs font-bold text-slate-600">{task.assignee || 'Sin asignar'}</span>
+                      <span className="text-xs font-bold text-slate-600">
+                        {task.assignees && task.assignees.length > 0 ? (
+                          task.assignees.length === 1 ? task.assignees[0] : `${task.assignees[0]} +${task.assignees.length - 1}`
+                        ) : 'Sin asignar'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-xs font-bold text-slate-400">
