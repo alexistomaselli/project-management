@@ -5,9 +5,10 @@ import { Layers, MoreVertical, Calendar, Globe } from 'lucide-react';
 
 interface ProjectListProps {
   projects: Project[];
+  onSelect: (projectId: string) => void;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ projects }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelect }) => {
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
       case 'active': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
@@ -21,7 +22,11 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects }) => {
     <div className="space-y-8 animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {projects.map((project) => (
-          <div key={project.id} className="glass-card hover-glow overflow-hidden group border-slate-100 bg-white">
+          <div
+            key={project.id}
+            onClick={() => onSelect(project.id)}
+            className="glass-card hover-glow overflow-hidden group border-slate-100 bg-white cursor-pointer transition-transform active:scale-[0.98]"
+          >
             <div className="p-8">
               <div className="flex items-center justify-between mb-6">
                 <div className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getStatusColor(project.status)}`}>

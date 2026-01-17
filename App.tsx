@@ -19,11 +19,15 @@ import ProjectList from './components/ProjectList';
 import TaskList from './components/TaskList';
 import HistoryView from './components/HistoryView';
 import McpChat from './components/McpChat';
+import ProjectDetail from './components/ProjectDetail';
+import TaskDetail from './components/TaskDetail';
 import { Project, Task, Activity } from './types';
 import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'tasks' | 'history'>('dashboard');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -43,6 +47,7 @@ const App: React.FC = () => {
           id: t.id,
           projectId: t.project_id,
           title: t.title,
+          description: t.description,
           status: t.status,
           priority: t.priority,
           assignee: t.assigned_to,
@@ -97,25 +102,25 @@ const App: React.FC = () => {
             icon={<LayoutDashboard className="w-5 h-5" />}
             label="Dashboard"
             active={activeTab === 'dashboard'}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); setSelectedProjectId(null); setSelectedTaskId(null); }}
           />
           <NavItem
             icon={<Layers className="w-5 h-5" />}
             label="Proyectos"
             active={activeTab === 'projects'}
-            onClick={() => setActiveTab('projects')}
+            onClick={() => { setActiveTab('projects'); setSelectedProjectId(null); setSelectedTaskId(null); }}
           />
           <NavItem
             icon={<CheckSquare className="w-5 h-5" />}
             label="Tareas & Issues"
             active={activeTab === 'tasks'}
-            onClick={() => setActiveTab('tasks')}
+            onClick={() => { setActiveTab('tasks'); setSelectedProjectId(null); setSelectedTaskId(null); }}
           />
           <NavItem
             icon={<History className="w-5 h-5" />}
             label="Historial"
             active={activeTab === 'history'}
-            onClick={() => setActiveTab('history')}
+            onClick={() => { setActiveTab('history'); setSelectedProjectId(null); setSelectedTaskId(null); }}
           />
         </div>
 
@@ -138,12 +143,25 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm mb-1">
               <span>Workspace</span>
               <ChevronRight className="w-4 h-4" />
-              <span className="text-slate-400 capitalize">{activeTab}</span>
+              <button
+                onClick={() => { setSelectedProjectId(null); setSelectedTaskId(null); }}
+                className="hover:text-indigo-800 transition-colors capitalize"
+              >
+                {activeTab}
+              </button>
+              {(selectedProjectId || selectedTaskId) && (
+                <>
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                  <span className="text-slate-400">Detalles</span>
+                </>
+              )}
             </div>
             <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
-              {activeTab === 'dashboard' ? 'Bienvenido, Alex' :
-                activeTab === 'projects' ? 'Repositorios y Proyectos' :
-                  activeTab === 'tasks' ? 'Backlog de Tareas' : 'Trazabilidad de Actividad'}
+              {selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name) :
+                selectedTaskId ? (tasks.find(t => t.id === selectedTaskId)?.title) :
+                  activeTab === 'dashboard' ? 'Bienvenido, Alex' :
+                    activeTab === 'projects' ? 'Repositorios y Proyectos' :
+                      activeTab === 'tasks' ? 'Backlog de Tareas' : 'Trazabilidad de Actividad'}
             </h1>
           </div>
 
@@ -174,10 +192,28 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-12 gap-10">
             <div className="col-span-8 space-y-8 animate-fadeIn">
-              {activeTab === 'dashboard' && <Dashboard projects={projects} tasks={tasks} activities={activities} />}
-              {activeTab === 'projects' && <ProjectList projects={projects} />}
-              {activeTab === 'tasks' && <TaskList tasks={tasks} />}
-              {activeTab === 'history' && <HistoryView activities={activities} />}
+              {selectedProjectId ? (
+                <ProjectDetail
+                  project={projects.find(p => p.id === selectedProjectId)!}
+                  tasks={tasks}
+                  activities={activities}
+                  onBack={() => setSelectedProjectId(null)}
+                  onSelectTask={(id) => { setSelectedTaskId(id); setSelectedProjectId(null); }}
+                />
+              ) : selectedTaskId ? (
+                <TaskDetail
+                  task={tasks.find(t => t.id === selectedTaskId)!}
+                  project={projects.find(p => p.id === tasks.find(t => t.id === selectedTaskId)?.projectId)}
+                  onBack={() => setSelectedTaskId(null)}
+                />
+              ) : (
+                <>
+                  {activeTab === 'dashboard' && <Dashboard projects={projects} tasks={tasks} activities={activities} />}
+                  {activeTab === 'projects' && <ProjectList projects={projects} onSelect={setSelectedProjectId} />}
+                  {activeTab === 'tasks' && <TaskList tasks={tasks} onSelectTask={setSelectedTaskId} />}
+                  {activeTab === 'history' && <HistoryView activities={activities} />}
+                </>
+              )}
             </div>
 
             <div className="col-span-4">
@@ -234,8 +270,8 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 group ${active
-        ? 'bg-indigo-50 text-indigo-600'
-        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+      ? 'bg-indigo-50 text-indigo-600'
+      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
       }`}
   >
     <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>

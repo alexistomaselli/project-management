@@ -5,9 +5,10 @@ import { CheckCircle2, Circle, Clock, AlertTriangle, User } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
+  onSelectTask?: (taskId: string) => void;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
   const getStatusIcon = (status: TaskStatus) => {
     switch (status) {
       case 'done': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
@@ -44,7 +45,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {tasks.map((task) => (
-                <tr key={task.id} className="hover:bg-slate-50/50 transition-all group">
+                <tr
+                  key={task.id}
+                  onClick={() => onSelectTask?.(task.id)}
+                  className="hover:bg-slate-50/50 transition-all group cursor-pointer"
+                >
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       {getStatusIcon(task.status)}
@@ -77,8 +82,8 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${task.status === 'done' ? 'bg-emerald-500' :
-                          task.status === 'in_progress' ? 'bg-amber-500' :
-                            task.status === 'review' ? 'bg-indigo-500' : 'bg-slate-300'
+                        task.status === 'in_progress' ? 'bg-amber-500' :
+                          task.status === 'review' ? 'bg-indigo-500' : 'bg-slate-300'
                         }`}></span>
                       <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
                         {task.status}
