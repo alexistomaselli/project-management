@@ -12,7 +12,9 @@ import {
   BrainCircuit,
   Terminal,
   ChevronRight,
-  Loader2
+  Loader2,
+  Menu,
+  X
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ProjectList from './components/ProjectList';
@@ -33,6 +35,7 @@ const App: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -97,13 +100,30 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden animate-fadeIn"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <nav className="fixed left-0 top-0 h-full w-72 bg-white border-r border-[#F1F5F9] px-6 py-8 z-30">
-        <div className="flex items-center gap-3 mb-10 px-2">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-            <BrainCircuit className="text-white w-6 h-6" />
+      <nav className={`fixed left-0 top-0 h-full w-72 bg-white border-r border-[#F1F5F9] px-6 py-8 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0 shadow-2xl shadow-slate-200' : '-translate-x-full'
+        }`}>
+        <div className="flex items-center justify-between mb-10 px-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <BrainCircuit className="text-white w-6 h-6" />
+            </div>
+            <span className="text-xl font-bold tracking-tight text-slate-800">ProjectCentral</span>
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-800">ProjectCentral</span>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden w-10 h-10 flex items-center justify-center text-slate-400 hover:text-indigo-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         <div className="space-y-1">
@@ -111,25 +131,25 @@ const App: React.FC = () => {
             icon={<LayoutDashboard className="w-5 h-5" />}
             label="Dashboard"
             active={activeTab === 'dashboard'}
-            onClick={() => { setActiveTab('dashboard'); setSelectedProjectId(null); setSelectedTaskId(null); }}
+            onClick={() => { setActiveTab('dashboard'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
           />
           <NavItem
             icon={<Layers className="w-5 h-5" />}
             label="Proyectos"
             active={activeTab === 'projects'}
-            onClick={() => { setActiveTab('projects'); setSelectedProjectId(null); setSelectedTaskId(null); }}
+            onClick={() => { setActiveTab('projects'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
           />
           <NavItem
             icon={<CheckSquare className="w-5 h-5" />}
             label="Tareas & Issues"
             active={activeTab === 'tasks'}
-            onClick={() => { setActiveTab('tasks'); setSelectedProjectId(null); setSelectedTaskId(null); }}
+            onClick={() => { setActiveTab('tasks'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
           />
           <NavItem
             icon={<History className="w-5 h-5" />}
             label="Historial"
             active={activeTab === 'history'}
-            onClick={() => { setActiveTab('history'); setSelectedProjectId(null); setSelectedTaskId(null); }}
+            onClick={() => { setActiveTab('history'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
           />
         </div>
 
@@ -146,49 +166,57 @@ const App: React.FC = () => {
       </nav>
 
       {/* Main Content Area */}
-      <main className="flex-1 ml-72 p-10 pb-32">
-        <header className="flex items-center justify-between mb-12 animate-slide-up">
-          <div>
-            <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm mb-1">
-              <span>Workspace</span>
-              <ChevronRight className="w-4 h-4" />
-              <button
-                onClick={() => { setSelectedProjectId(null); setSelectedTaskId(null); }}
-                className="hover:text-indigo-800 transition-colors capitalize"
-              >
-                {activeTab}
-              </button>
-              {(selectedProjectId || selectedTaskId) && (
-                <>
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
-                  <span className="text-slate-400">Detalles</span>
-                </>
-              )}
+      <main className="flex-1 lg:ml-72 p-6 lg:p-10 pb-32 w-full max-w-[100vw] overflow-x-hidden">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 animate-slide-up">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm mb-1">
+                <span>Workspace</span>
+                <ChevronRight className="w-4 h-4" />
+                <button
+                  onClick={() => { setSelectedProjectId(null); setSelectedTaskId(null); }}
+                  className="hover:text-indigo-800 transition-colors capitalize"
+                >
+                  {activeTab}
+                </button>
+                {(selectedProjectId || selectedTaskId) && (
+                  <>
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                    <span className="text-slate-400">Detalles</span>
+                  </>
+                )}
+              </div>
+              <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+                {selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name) :
+                  selectedTaskId ? (tasks.find(t => t.id === selectedTaskId)?.title) :
+                    activeTab === 'dashboard' ? 'Bienvenido, Alex' :
+                      activeTab === 'projects' ? 'Repositorios y Proyectos' :
+                        activeTab === 'tasks' ? 'Backlog de Tareas' : 'Trazabilidad de Actividad'}
+              </h1>
             </div>
-            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
-              {selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name) :
-                selectedTaskId ? (tasks.find(t => t.id === selectedTaskId)?.title) :
-                  activeTab === 'dashboard' ? 'Bienvenido, Alex' :
-                    activeTab === 'projects' ? 'Repositorios y Proyectos' :
-                      activeTab === 'tasks' ? 'Backlog de Tareas' : 'Trazabilidad de Actividad'}
-            </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative">
+          <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto">
+            <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar en proyectos..."
-                className="bg-white border border-[#E2E8F0] rounded-2xl pl-10 pr-4 py-2.5 text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+                placeholder="Buscar..."
+                className="bg-white border border-[#E2E8F0] rounded-2xl pl-10 pr-4 py-2.5 text-sm w-32 md:w-64 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
               />
             </div>
-            <button className="w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-all shadow-sm hover:shadow-md">
+            <button className="w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-all shadow-sm hover:shadow-md shrink-0">
               <Bell className="w-5 h-5" />
             </button>
-            <button className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
+            <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 md:px-5 py-2.5 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 shrink-0 whitespace-nowrap">
               <Plus className="w-4 h-4" />
-              <span>Nuevo Proyecto</span>
+              <span className="hidden md:inline">Nuevo Proyecto</span>
             </button>
           </div>
         </header>
@@ -199,8 +227,8 @@ const App: React.FC = () => {
             <p className="font-medium animate-pulse">Cargando tu espacio de trabajo...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-12 gap-10">
-            <div className="col-span-8 space-y-8 animate-fadeIn">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="col-span-12 lg:col-span-8 space-y-8 animate-fadeIn">
               {selectedProjectId ? (
                 <ProjectDetail
                   project={projects.find(p => p.id === selectedProjectId)!}
@@ -227,7 +255,7 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="col-span-4">
+            <div className="col-span-12 lg:col-span-4">
               <div className="sticky top-10 space-y-8">
                 <div className="glass-card p-6 border-indigo-100 bg-gradient-to-br from-indigo-50 to-white">
                   <div className="flex items-center gap-3 mb-6">
@@ -266,7 +294,7 @@ const App: React.FC = () => {
           animation: fadeIn 0.4s ease-out forwards;
         }
       `}</style>
-    </div>
+    </div >
   );
 };
 
