@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   BarChart3,
   LayoutDashboard,
   Layers,
   CheckSquare,
-  History,
+  History as HistoryIcon,
   Plus,
   Search,
   Bell,
@@ -17,27 +16,29 @@ import {
   X,
   BookOpen
 } from 'lucide-react';
+import { Routes, Route, Link, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import ProjectList from './components/ProjectList';
 import TaskList from './components/TaskList';
 import HistoryView from './components/HistoryView';
 import McpChat from './components/McpChat';
-import ProjectDetail from './components/ProjectDetail';
-import TaskDetail from './components/TaskDetail';
+import ProjectDetailWrapper from './components/ProjectDetailWrapper';
+import TaskDetailWrapper from './components/TaskDetailWrapper';
 import DocsView from './components/DocsView';
 import { Project, Task, Activity } from './types';
 import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'tasks' | 'history' | 'docs'>('dashboard');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const activeTab = location.pathname.split('/')[1] || 'dashboard';
 
   const fetchData = async () => {
     setLoading(true);
@@ -133,31 +134,36 @@ const App: React.FC = () => {
             icon={<LayoutDashboard className="w-5 h-5" />}
             label="Dashboard"
             active={activeTab === 'dashboard'}
-            onClick={() => { setActiveTab('dashboard'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+            to="/dashboard"
+            onClick={() => setIsSidebarOpen(false)}
           />
           <NavItem
             icon={<Layers className="w-5 h-5" />}
             label="Proyectos"
             active={activeTab === 'projects'}
-            onClick={() => { setActiveTab('projects'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+            to="/projects"
+            onClick={() => setIsSidebarOpen(false)}
           />
           <NavItem
             icon={<CheckSquare className="w-5 h-5" />}
             label="Tareas & Issues"
             active={activeTab === 'tasks'}
-            onClick={() => { setActiveTab('tasks'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+            to="/tasks"
+            onClick={() => setIsSidebarOpen(false)}
           />
           <NavItem
-            icon={<History className="w-5 h-5" />}
+            icon={<HistoryIcon className="w-5 h-5" />}
             label="Historial"
             active={activeTab === 'history'}
-            onClick={() => { setActiveTab('history'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+            to="/history"
+            onClick={() => setIsSidebarOpen(false)}
           />
           <NavItem
             icon={<BookOpen className="w-5 h-5" />}
             label="Documentación"
             active={activeTab === 'docs'}
-            onClick={() => { setActiveTab('docs'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+            to="/docs"
+            onClick={() => setIsSidebarOpen(false)}
           />
         </div>
 
@@ -187,25 +193,26 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm mb-1">
                 <span>Workspace</span>
                 <ChevronRight className="w-4 h-4" />
-                <button
-                  onClick={() => { setSelectedProjectId(null); setSelectedTaskId(null); }}
+                <Link
+                  to={`/${activeTab}`}
                   className="hover:text-indigo-800 transition-colors capitalize"
                 >
                   {activeTab}
-                </button>
-                {(selectedProjectId || selectedTaskId) && (
+                </Link>
+                {location.pathname.includes('/detalle/') || (location.pathname.split('/').length > 2 && activeTab !== 'dashboard') ? (
                   <>
                     <ChevronRight className="w-4 h-4 text-slate-300" />
                     <span className="text-slate-400">Detalles</span>
                   </>
-                )}
+                ) : null}
               </div>
               <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-                {selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.name) :
-                  selectedTaskId ? (tasks.find(t => t.id === selectedTaskId)?.title) :
-                    activeTab === 'dashboard' ? 'Bienvenido, Alex' :
-                      activeTab === 'projects' ? 'Repositorios y Proyectos' :
-                        activeTab === 'tasks' ? 'Backlog de Tareas' : 'Trazabilidad de Actividad'}
+                <HeaderTitle
+                  pathname={location.pathname}
+                  projects={projects}
+                  tasks={tasks}
+                  activeTab={activeTab}
+                />
               </h1>
             </div>
           </div>
@@ -237,31 +244,35 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             <div className="col-span-12 lg:col-span-8 space-y-8 animate-fadeIn">
-              {selectedProjectId ? (
-                <ProjectDetail
-                  project={projects.find(p => p.id === selectedProjectId)!}
-                  tasks={tasks}
-                  activities={activities}
-                  onBack={() => setSelectedProjectId(null)}
-                  onSelectTask={(id) => { setSelectedTaskId(id); setSelectedProjectId(null); }}
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard projects={projects} tasks={tasks} activities={activities} />} />
+                <Route path="/projects" element={<ProjectList projects={projects} onSelect={(id) => navigate(`/projects/${id}`)} />} />
+                <Route
+                  path="/projects/:projectId"
+                  element={
+                    <ProjectDetailWrapper
+                      projects={projects}
+                      tasks={tasks}
+                      activities={activities}
+                    />
+                  }
                 />
-              ) : selectedTaskId ? (
-                <TaskDetail
-                  task={tasks.find(t => t.id === selectedTaskId)!}
-                  project={projects.find(p => p.id === tasks.find(t => t.id === selectedTaskId)?.projectId)}
-                  comments={comments}
-                  onBack={() => setSelectedTaskId(null)}
-                  onRefresh={fetchData}
+                <Route path="/tasks" element={<TaskList tasks={tasks} onSelectTask={(id) => navigate(`/tasks/${id}`)} />} />
+                <Route
+                  path="/tasks/:taskId"
+                  element={
+                    <TaskDetailWrapper
+                      tasks={tasks}
+                      projects={projects}
+                      comments={comments}
+                      onRefresh={fetchData}
+                    />
+                  }
                 />
-              ) : (
-                <>
-                  {activeTab === 'dashboard' && <Dashboard projects={projects} tasks={tasks} activities={activities} />}
-                  {activeTab === 'projects' && <ProjectList projects={projects} onSelect={setSelectedProjectId} />}
-                  {activeTab === 'tasks' && <TaskList tasks={tasks} onSelectTask={setSelectedTaskId} />}
-                  {activeTab === 'history' && <HistoryView activities={activities} />}
-                  {activeTab === 'docs' && <DocsView />}
-                </>
-              )}
+                <Route path="/history" element={<HistoryView activities={activities} />} />
+                <Route path="/docs" element={<DocsView />} />
+              </Routes>
             </div>
 
             <div className="col-span-12 lg:col-span-4">
@@ -312,11 +323,13 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  to: string;
   onClick: () => void;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
-  <button
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, to, onClick }) => (
+  <Link
+    to={to}
     onClick={onClick}
     className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 group ${active
       ? 'bg-indigo-50 text-indigo-600'
@@ -330,7 +343,26 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
       {label}
     </span>
     {active && <div className="ml-auto w-1.5 h-1.5 bg-indigo-600 rounded-full"></div>}
-  </button>
+  </Link>
 );
+
+const HeaderTitle: React.FC<{ pathname: string, projects: Project[], tasks: Task[], activeTab: string }> = ({ pathname, projects, tasks, activeTab }) => {
+  if (pathname.startsWith('/projects/')) {
+    const id = pathname.split('/')[2];
+    return <>{projects.find(p => p.id === id)?.name || 'Cargando Proyecto...'}</>;
+  }
+  if (pathname.startsWith('/tasks/')) {
+    const id = pathname.split('/')[2];
+    return <>{tasks.find(t => t.id === id)?.title || 'Cargando Tarea...'}</>;
+  }
+
+  switch (activeTab) {
+    case 'dashboard': return <>Bienvenido, Alex</>;
+    case 'projects': return <>Repositorios y Proyectos</>;
+    case 'tasks': return <>Backlog de Tareas</>;
+    case 'docs': return <>Documentación de Comandos MCP</>;
+    default: return <>Trazabilidad de Actividad</>;
+  }
+};
 
 export default App;
