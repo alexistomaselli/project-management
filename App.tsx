@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Loader2,
   Menu,
-  X
+  X,
+  BookOpen
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ProjectList from './components/ProjectList';
@@ -23,11 +24,12 @@ import HistoryView from './components/HistoryView';
 import McpChat from './components/McpChat';
 import ProjectDetail from './components/ProjectDetail';
 import TaskDetail from './components/TaskDetail';
+import DocsView from './components/DocsView';
 import { Project, Task, Activity } from './types';
 import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'tasks' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'tasks' | 'history' | 'docs'>('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -151,6 +153,12 @@ const App: React.FC = () => {
             active={activeTab === 'history'}
             onClick={() => { setActiveTab('history'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
           />
+          <NavItem
+            icon={<BookOpen className="w-5 h-5" />}
+            label="Documentación"
+            active={activeTab === 'docs'}
+            onClick={() => { setActiveTab('docs'); setSelectedProjectId(null); setSelectedTaskId(null); setIsSidebarOpen(false); }}
+          />
         </div>
 
         <div className="mt-auto pt-8">
@@ -251,6 +259,7 @@ const App: React.FC = () => {
                   {activeTab === 'projects' && <ProjectList projects={projects} onSelect={setSelectedProjectId} />}
                   {activeTab === 'tasks' && <TaskList tasks={tasks} onSelectTask={setSelectedTaskId} />}
                   {activeTab === 'history' && <HistoryView activities={activities} />}
+                  {activeTab === 'docs' && <DocsView />}
                 </>
               )}
             </div>
