@@ -11,10 +11,11 @@ interface McpChatProps {
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   activities: Activity[];
   setActivities: React.Dispatch<React.SetStateAction<Activity[]>>;
+  onRefresh?: () => void;
 }
 
 const McpChat: React.FC<McpChatProps> = ({
-  projects, tasks, activities
+  projects, tasks, activities, onRefresh
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -34,26 +35,68 @@ const McpChat: React.FC<McpChatProps> = ({
   }, [messages, isTyping]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isTyping) return;
+    const text = inputValue.trim();
+    if (!text || isTyping) return;
 
     const userMsg: Message = {
       role: 'user',
-      content: inputValue,
+      content: text,
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
     setIsTyping(true);
 
-    // Simulación de procesamiento MCP (En producción, esto lo haría el Agente Antigravity)
-    // Pero aquí permitimos interacción básica para que la UI se sienta viva
-    setTimeout(async () => {
-      let responseContent = "Entendido. He procesado tu solicitud a través del servidor MCP.";
+    try {
+      // Regex para detectar creación de proyectos
+      const projectMatch = text.match(/(?:crea|añade|nuevo|crear|añadir)\s+proyecto\s+(?:llamado\s+)?["'“]?([^"'“”]+)["'“”]?(?:\s+con\s+(?:la\s+)?url\s+([^\s"'“”]+))?/i);
 
-      if (inputValue.toLowerCase().includes('proyecto')) {
-        responseContent = "He registrado la intención de crear un proyecto. Como soy una interfaz de visualización, por favor confirma la creación definitiva con Antigravity en el chat principal.";
-      } else if (inputValue.toLowerCase().includes('tarea') || inputValue.toLowerCase().includes('task')) {
-        responseContent = "Tareas listadas. He sincronizado el backlog con la base de datos central de DyD IA Labs.";
+      // Regex para detectar creación de tareas (issues)
+      const taskMatch = text.match(/(?:crea|añade|nueva|crear|añadir)\s+(?:tarea|task|issue)\s+(?:llamada\s+)?["'“]?([^"'“”]+)["'“”]?(?:\s+(?:en|para)\s+(?:el\s+)?proyecto\s+["'“]?([^"'“”]+)["'“”]?)?/i);
+
+      let responseContent = "Entendido. He procesado tu solicitud. ¿En qué más puedo ayudarte?";
+
+      if (projectMatch) {
+        const name = projectMatch[1];
+        const repoUrl = projectMatch[2] || '';
+
+        const { data, error } = await supabase.from('projects').insert([
+          { name, description: 'Creado vía MCP Chat', repository_url: repoUrl, status: 'active', progress: 0 }
+        ]).select().single();
+
+        if (error) throw error;
+
+        await supabase.from('activities').insert([
+          { project_id: data.id, action: 'project_created', details: { name } }
+        ]);
+
+        responseContent = `🚀 ¡Excelente! He creado el proyecto "${name}" correctamente. Ya puedes verlo en tu lista de proyectos.`;
+      }
+      else if (taskMatch) {
+        const title = taskMatch[1];
+        const projNamePart = taskMatch[2];
+
+        let projectId = projects[0]?.id; // Default al primero si no se especifica
+
+        if (projNamePart) {
+          const found = projects.find(p => p.name.toLowerCase().includes(projNamePart.toLowerCase()));
+          if (found) projectId = found.id;
+        }
+
+        const { data, error } = await supabase.from('issues').insert([
+          { project_id: projectId, title, description: 'Generado automáticamente vía MCP', status: 'todo', priority: 'medium' }
+        ]).select().single();
+
+        if (error) throw error;
+
+        await supabase.from('activities').insert([
+          { project_id: projectId, issue_id: data.id, action: 'issue_created', details: { title } }
+        ]);
+
+        responseContent = `✅ Tarea "${title}" añadida con éxito. Backlog actualizado.`;
+      }
+      else if (text.toLowerCase().includes('hola') || text.toLowerCase().includes('saludos')) {
+        responseContent = "¡Hola! Soy tu asistente de gestión. Puedo crear proyectos, añadir tareas o darte reportes de estado. ¿Qué necesitas hoy?";
       }
 
       setMessages(prev => [...prev, {
@@ -61,8 +104,18 @@ const McpChat: React.FC<McpChatProps> = ({
         content: responseContent,
         timestamp: new Date()
       }]);
+
+      if (onRefresh) onRefresh();
+
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Lo siento, hubo un error al procesar el comando: ${err.message}`,
+        timestamp: new Date()
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -80,8 +133,8 @@ const McpChat: React.FC<McpChatProps> = ({
                 {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
               <div className={`rounded-2xl p-4 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
-                  ? 'bg-indigo-600 text-white rounded-tr-none'
-                  : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
+                ? 'bg-indigo-600 text-white rounded-tr-none'
+                : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
                 }`}>
                 <div className="whitespace-pre-wrap">{msg.content}</div>
                 <div className={`text-[10px] mt-2 opacity-50 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>

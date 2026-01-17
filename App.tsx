@@ -285,6 +285,7 @@ const App: React.FC = () => {
                       setTasks={setTasks}
                       activities={activities}
                       setActivities={setActivities}
+                      onRefresh={fetchData}
                     />
                   </div>
                 </div>
