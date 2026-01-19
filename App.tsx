@@ -15,7 +15,9 @@ import {
   Menu,
   X,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  Settings as SettingsIcon,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Routes, Route, Link, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
@@ -25,14 +27,17 @@ import TaskList from './components/TaskList';
 import TasksPage from './components/TasksPage';
 import HistoryView from './components/HistoryView';
 import McpChat from './components/McpChat';
+import AiAssistantView from './components/AiAssistantView';
+import SettingsView from './components/SettingsView';
 import ProjectDetailWrapper from './components/ProjectDetailWrapper';
 import TaskDetailWrapper from './components/TaskDetailWrapper';
 import DocsView from './components/DocsView';
 import Auth from './components/Auth';
-import { Project, Task, Activity, Profile, TaskStatus, Priority } from './types';
+import { Project, Task, Activity, Profile, TaskStatus, Priority, Message } from './types';
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, Sparkles } from 'lucide-react';
+import { useVisualFeedback } from './context/VisualFeedbackContext';
 
 const App: React.FC = () => {
   const location = useLocation();
@@ -49,6 +54,8 @@ const App: React.FC = () => {
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectRepo, setNewProjectRepo] = useState('');
+
+  const { showToast, confirmAction } = useVisualFeedback();
 
   const activeTab = location.pathname.split('/')[1] || 'dashboard';
 
@@ -82,8 +89,8 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const { data: projData } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
       const { data: taskData } = await supabase.from('issues').select('*').order('created_at', { ascending: false });
@@ -132,29 +139,34 @@ const App: React.FC = () => {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este proyecto? Esta acción borrará todas sus tareas y actividades de forma permanente.')) {
-      return;
-    }
+    confirmAction({
+      title: 'Eliminar Proyecto',
+      message: '¿Estás seguro de que deseas eliminar este proyecto? Esta acción borrará todas sus tareas y actividades de forma permanente.',
+      confirmLabel: 'Eliminar Proyecto',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          // Delete activities first (foreign key constraints)
+          await supabase.from('activities').delete().eq('project_id', projectId);
+          // Delete issues
+          await supabase.from('issues').delete().eq('project_id', projectId);
+          // Delete project
+          const { error } = await supabase.from('projects').delete().eq('id', projectId);
 
-    try {
-      setLoading(true);
-      // Delete activities first (foreign key constraints)
-      await supabase.from('activities').delete().eq('project_id', projectId);
-      // Delete issues
-      await supabase.from('issues').delete().eq('project_id', projectId);
-      // Delete project
-      const { error } = await supabase.from('projects').delete().eq('id', projectId);
+          if (error) throw error;
 
-      if (error) throw error;
-
-      await fetchData();
-      navigate('/projects');
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      alert('Error al eliminar el proyecto.');
-    } finally {
-      setLoading(false);
-    }
+          await fetchData();
+          showToast('Proyecto eliminado', 'La infraestructura ha sido removida del servidor.', 'success');
+          navigate('/projects');
+        } catch (error: any) {
+          console.error('Error deleting project:', error);
+          showToast('Error al eliminar', error.message || 'No se pudo completar la operación.', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const handleCreateIssue = async (projectId: string, title: string, description: string, priority: Priority = 'medium', assignees: string[] = [], dueDate: string = '') => {
@@ -185,9 +197,10 @@ const App: React.FC = () => {
       }
 
       await fetchData();
-    } catch (error) {
+      showToast('Tarea creada', `Se ha generado la tarea "${title}" exitosamente.`, 'success');
+    } catch (error: any) {
       console.error('Error creating issue:', error);
-      alert('Error al crear la tarea.');
+      showToast('Error', error.message || 'Error al crear la tarea.', 'error');
     }
   };
 
@@ -238,8 +251,10 @@ const App: React.FC = () => {
       setNewProjectName('');
       setNewProjectRepo('');
       fetchData();
-    } catch (error) {
+      showToast('Proyecto creado', `El proyecto "${project?.name}" está listo.`, 'success');
+    } catch (error: any) {
       console.error('Error creating project:', error);
+      showToast('Error', error.message || 'No se pudo crear el proyecto.', 'error');
     }
   };
 
@@ -276,6 +291,26 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    confirmAction({
+      title: 'Eliminar Tarea',
+      message: '¿Estás seguro de que deseas eliminar esta tarea de forma permanente? Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar Definitivamente',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase.from('issues').delete().eq('id', taskId);
+          if (error) throw error;
+          await fetchData();
+          showToast('Tarea eliminada', 'El issue ha sido removido del backlog.', 'success');
+        } catch (error: any) {
+          console.error('Error deleting task:', error);
+          showToast('Error al eliminar', error.message || 'No se pudo borrar la tarea.', 'error');
+        }
+      }
+    });
+  };
+
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
       {/* Mobile Sidebar Overlay */}
@@ -310,6 +345,20 @@ const App: React.FC = () => {
             label="Dashboard"
             active={activeTab === 'dashboard'}
             to="/dashboard"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+          <NavItem
+            icon={<Sparkles className="w-5 h-5" />}
+            label="AI Assistant"
+            active={activeTab === 'chat'}
+            to="/chat"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+          <NavItem
+            icon={<SettingsIcon className="w-5 h-5" />}
+            label="Configuración"
+            active={activeTab === 'settings'}
+            to="/settings"
             onClick={() => setIsSidebarOpen(false)}
           />
           <NavItem
@@ -444,6 +493,8 @@ const App: React.FC = () => {
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard projects={projects} tasks={tasks} activities={activities} />} />
+                <Route path="/chat" element={<AiAssistantView projects={projects} tasks={tasks} activities={activities} profile={profile} onRefresh={fetchData} />} />
+                <Route path="/settings" element={<SettingsView profile={profile} />} />
                 <Route path="/projects" element={<ProjectList projects={projects} onSelect={(id) => navigate(`/projects/${id}`)} />} />
                 <Route
                   path="/projects/:projectId"
@@ -454,14 +505,17 @@ const App: React.FC = () => {
                       activities={activities}
                       onDeleteProject={handleDeleteProject}
                       onCreateIssue={handleCreateIssue}
+                      onDeleteTask={handleDeleteTask}
                     />
                   }
                 />
                 <Route path="/tasks" element={
                   <TasksPage
                     tasks={tasks}
+                    projects={projects}
                     onSelectTask={(id) => navigate(`/tasks/${id}`)}
                     onUpdateTaskStatus={handleUpdateTaskStatus}
+                    onDeleteTask={handleDeleteTask}
                   />
                 } />
                 <Route
@@ -474,6 +528,7 @@ const App: React.FC = () => {
                       activities={activities}
                       onRefresh={fetchData}
                       onUpdateStatus={handleUpdateTaskStatus}
+                      onDeleteTask={handleDeleteTask}
                     />
                   }
                 />
@@ -672,6 +727,8 @@ const HeaderTitle: React.FC<{ pathname: string, projects: Project[], tasks: Task
 
   switch (activeTab) {
     case 'dashboard': return <>Bienvenido, Alex</>;
+    case 'chat': return <>Asistente Inteligente MCP</>;
+    case 'settings': return <>Configuración Core AI</>;
     case 'projects': return <>Repositorios y Proyectos</>;
     case 'tasks': return <>Backlog de Tareas</>;
     case 'docs': return <>Documentación de Comandos MCP</>;

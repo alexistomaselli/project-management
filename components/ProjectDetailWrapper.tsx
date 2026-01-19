@@ -10,6 +10,7 @@ interface ProjectDetailWrapperProps {
     activities: Activity[];
     onDeleteProject: (id: string) => void;
     onCreateIssue: (projectId: string, title: string, description: string, priority: Priority, assignees: string[], dueDate: string) => void;
+    onDeleteTask: (taskId: string) => Promise<void>;
 }
 
 const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
@@ -17,7 +18,8 @@ const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
     tasks,
     activities,
     onDeleteProject,
-    onCreateIssue
+    onCreateIssue,
+    onDeleteTask
 }) => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
@@ -40,12 +42,14 @@ const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
     return (
         <ProjectDetail
             project={project}
+            projects={projects}
             tasks={tasks}
             activities={activities}
             onBack={() => navigate('/projects')}
             onSelectTask={(taskId) => navigate(`/tasks/${taskId}`)}
             onDelete={() => onDeleteProject(project.id)}
             onCreateIssue={onCreateIssue}
+            onDeleteTask={onDeleteTask}
         />
     );
 };

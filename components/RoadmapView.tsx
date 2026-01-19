@@ -1,10 +1,9 @@
 
-import React, { useRef, useLayoutEffect } from 'react';
+import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import { Task, TaskStatus, Activity } from '../types';
 import { motion } from 'framer-motion';
 import {
     Calendar,
-    ChevronRight,
     Circle,
     CheckCircle2,
     Clock,
@@ -13,7 +12,9 @@ import {
     MessageSquare,
     PlusCircle,
     Activity as ActivityIcon,
-    ArrowRight
+    ArrowRight,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 
 interface RoadmapViewProps {
@@ -133,17 +134,35 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, activities, onSelectTa
     };
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const scrollAmount = 400;
 
-    useLayoutEffect(() => {
+    const scroll = (direction: 'left' | 'right') => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+            const currentScroll = scrollContainerRef.current.scrollLeft;
+            const targetScroll = direction === 'left'
+                ? currentScroll - scrollAmount
+                : currentScroll + scrollAmount;
+
+            scrollContainerRef.current.scrollTo({
+                left: targetScroll,
+                behavior: 'smooth'
+            });
         }
-    }, [weekSections.length]);
+    };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+            }
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [weekSections]);
 
     let globalIndex = 0;
 
     return (
-        <div className="bg-slate-50/30 rounded-[3rem] p-8 mt-4 overflow-hidden">
+        <div className="relative bg-slate-50/30 rounded-[3rem] p-8 mt-4 overflow-hidden">
             {/* Legend Header (Fixed at top) */}
             <div className="flex flex-col md:flex-row gap-6 px-10 mb-8 border-b border-slate-100 pb-6 justify-between items-start md:items-center">
                 <div>
@@ -195,7 +214,7 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, activities, onSelectTa
 
             <div
                 ref={scrollContainerRef}
-                className="relative h-[800px] overflow-x-auto hide-scrollbar min-w-max pb-10"
+                className="relative h-[800px] overflow-x-auto w-full pb-10"
             >
                 {/* Fixed Timeline Line (The "Pivot") */}
                 <div className="absolute top-[350px] left-0 right-0 h-0.5 bg-slate-100 z-10"></div>
@@ -301,6 +320,23 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, activities, onSelectTa
                         </div>
                     ))}
                 </div>
+            </div>
+            {/* Floating Navigation Controls */}
+            <div className="absolute bottom-12 right-12 flex gap-3 z-[200]">
+                <button
+                    onClick={() => scroll('left')}
+                    className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-slate-800 hover:scale-110 active:scale-95 transition-all border border-slate-700/50 group"
+                    title="Desplazar a la izquierda"
+                >
+                    <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
+                </button>
+                <button
+                    onClick={() => scroll('right')}
+                    className="w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all border border-indigo-500/50 group"
+                    title="Desplazar a la derecha"
+                >
+                    <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
+                </button>
             </div>
         </div>
     );

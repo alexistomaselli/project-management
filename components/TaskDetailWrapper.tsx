@@ -9,11 +9,12 @@ interface TaskDetailWrapperProps {
     projects: Project[];
     comments: any[];
     activities: Activity[];
-    onRefresh: () => void;
+    onRefresh: (isRefresh?: boolean) => Promise<void>;
     onUpdateStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+    onDeleteTask: (taskId: string) => Promise<void>;
 }
 
-const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, comments, activities, onRefresh, onUpdateStatus }) => {
+const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, comments, activities, onRefresh, onUpdateStatus, onDeleteTask }) => {
     const { taskId } = useParams<{ taskId: string }>();
     const navigate = useNavigate();
     const task = tasks.find((t) => t.id === taskId);
@@ -42,6 +43,7 @@ const TaskDetailWrapper: React.FC<TaskDetailWrapperProps> = ({ tasks, projects, 
             onBack={() => navigate(-1)}
             onRefresh={onRefresh}
             onUpdateStatus={onUpdateStatus}
+            onDelete={onDeleteTask}
         />
     );
 };

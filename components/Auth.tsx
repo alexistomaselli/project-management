@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Loader2, Mail, Lock, BrainCircuit, ArrowRight, ShieldCheck } from 'lucide-react';
+import { useVisualFeedback } from '../context/VisualFeedbackContext';
 
 interface AuthProps {
     onSuccess: () => void;
@@ -13,6 +14,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSignUp, setIsSignUp] = useState(false);
+    const { showToast } = useVisualFeedback();
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,7 +25,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             if (isSignUp) {
                 const { error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
-                alert('¡Registro exitoso! Por favor revisa tu email para confirmar.');
+                showToast('¡Registro exitoso!', 'Por favor revisa tu email para confirmar tu cuenta.', 'success');
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;

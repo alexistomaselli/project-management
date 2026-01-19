@@ -1,14 +1,16 @@
 
 import React from 'react';
-import { Task, TaskStatus, Priority } from '../types';
-import { CheckCircle2, Circle, Clock, AlertTriangle, User } from 'lucide-react';
+import { Task, TaskStatus, Priority, Project } from '../types';
+import { CheckCircle2, Circle, Clock, AlertTriangle, User, Trash2 } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
+  projects: Project[];
   onSelectTask?: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => Promise<void>;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, projects, onSelectTask, onDeleteTask }) => {
   const getStatusIcon = (status: TaskStatus) => {
     switch (status) {
       case 'done': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
@@ -37,10 +39,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Issue / Tarea</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Proyecto</th>
                 <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Prioridad</th>
                 <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Responsable</th>
                 <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Fecha</th>
                 <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Estado</th>
+                <th className="px-8 py-6 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -61,6 +65,13 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
                           ID: {task.id.slice(0, 8)}...
                         </span>
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100/50 self-start">
+                        {projects.find(p => p.id === task.projectId)?.name || 'Sin Proyecto'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -112,6 +123,18 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onSelectTask }) => {
                         {task.status}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteTask?.(task.id);
+                      }}
+                      className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all active:scale-90 group/btn"
+                      title="Eliminar Tarea"
+                    >
+                      <Trash2 className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -17,7 +17,8 @@ import {
     Share2,
     Layers,
     Circle,
-    Loader2
+    Loader2,
+    Trash2
 } from 'lucide-react';
 
 interface TaskDetailProps {
@@ -26,11 +27,12 @@ interface TaskDetailProps {
     comments: Comment[];
     activities: Activity[];
     onBack: () => void;
-    onRefresh: () => void;
+    onRefresh: (isRefresh?: boolean) => Promise<void>;
     onUpdateStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+    onDelete?: (taskId: string) => Promise<void>;
 }
 
-const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activities, onBack, onRefresh, onUpdateStatus }) => {
+const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activities, onBack, onRefresh, onUpdateStatus, onDelete }) => {
     const [newComment, setNewComment] = React.useState('');
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [isEditing, setIsEditing] = React.useState(false);
@@ -111,11 +113,18 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
         setIsSubmitting(true);
         try {
             await onUpdateStatus(task.id, newStatus);
-            onRefresh();
+            onRefresh(true);
         } catch (error) {
             console.error('Error updating status:', error);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (onDelete) {
+            await onDelete(task.id);
+            onBack();
         }
     };
 
@@ -158,6 +167,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
                 </button>
 
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleDelete}
+                        className="flex items-center gap-2 border border-rose-100 bg-rose-50/50 rounded-2xl px-4 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-600 hover:text-white transition-all"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Eliminar</span>
+                    </button>
                     <button className="flex items-center gap-2 border border-slate-200 rounded-2xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all">
                         <Share2 className="w-4 h-4" />
                         <span>Compartir</span>

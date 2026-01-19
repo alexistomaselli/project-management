@@ -1,14 +1,16 @@
 
 import React from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Task, TaskStatus } from '../types';
-import { MoreHorizontal, AlertCircle, Clock, CheckCircle2, Circle } from 'lucide-react';
+import { Task, TaskStatus, Project } from '../types';
+import { MoreHorizontal, AlertCircle, Clock, CheckCircle2, Circle, Layers, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface KanbanViewProps {
     tasks: Task[];
+    projects: Project[];
     onUpdateTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
     onSelectTask: (taskId: string) => void;
+    onDeleteTask?: (taskId: string) => Promise<void>;
 }
 
 const COLUMNS: { id: TaskStatus; label: string; icon: any; color: string }[] = [
@@ -18,7 +20,7 @@ const COLUMNS: { id: TaskStatus; label: string; icon: any; color: string }[] = [
     { id: 'done', label: 'Completado', icon: CheckCircle2, color: 'text-emerald-500' },
 ];
 
-const KanbanView: React.FC<KanbanViewProps> = ({ tasks, onUpdateTaskStatus, onSelectTask }) => {
+const KanbanView: React.FC<KanbanViewProps> = ({ tasks, projects, onUpdateTaskStatus, onSelectTask, onDeleteTask }) => {
     const onDragEnd = (result: DropResult) => {
         const { destination, source, draggableId } = result;
 
@@ -86,10 +88,28 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, onUpdateTaskStatus, onSe
                                                                         }`}
                                                                 >
                                                                     <div className="space-y-3">
-                                                                        <div className="flex items-start justify-between">
-                                                                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${getTaskPriorityColor(task.priority)}`}>
-                                                                                {task.priority}
-                                                                            </span>
+                                                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${getTaskPriorityColor(task.priority)}`}>
+                                                                                    {task.priority}
+                                                                                </span>
+                                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-slate-100 bg-slate-50/50 text-slate-400">
+                                                                                    <Layers className="w-3 h-3" />
+                                                                                    <span className="text-[9px] font-bold truncate max-w-[80px]">
+                                                                                        {projects.find(p => p.id === task.projectId)?.name || 'Sin Proyecto'}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    onDeleteTask?.(task.id);
+                                                                                }}
+                                                                                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                                                                title="Eliminar"
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </button>
                                                                         </div>
 
                                                                         <h4 className="text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-indigo-600 transition-colors">

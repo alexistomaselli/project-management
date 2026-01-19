@@ -93,3 +93,42 @@ body {
     scrollbar-width: none;
   }
 }
+/* Custom AI Chat Typography */
+.prose-sm {
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+.prose p {
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+  padding-left: 1.25em !important;
+}
+
+.prose li {
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+}
+
+.prose strong {
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  margin-top: 1em !important;
+  margin-bottom: 0.5em !important;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.prose h3 {
+  font-size: 14px !important;
+  color: #1e1b4b !important;
+}
+

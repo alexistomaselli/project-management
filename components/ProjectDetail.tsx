@@ -24,24 +24,29 @@ import {
 import TaskList from './TaskList';
 import RoadmapView from './RoadmapView';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useVisualFeedback } from '../context/VisualFeedbackContext';
 
 interface ProjectDetailProps {
     project: Project;
+    projects: Project[];
     tasks: Task[];
     activities: Activity[];
     onBack: () => void;
     onSelectTask: (taskId: string) => void;
     onDelete?: () => void;
+    onDeleteTask?: (taskId: string) => Promise<void>;
     onCreateIssue: (projectId: string, title: string, description: string, priority: Priority, assignees: string[], dueDate: string) => void;
 }
 
 const ProjectDetail: React.FC<ProjectDetailProps> = ({
     project,
+    projects,
     tasks,
     activities,
     onBack,
     onSelectTask,
     onDelete,
+    onDeleteTask,
     onCreateIssue
 }) => {
     const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'roadmap'>('tasks');
@@ -55,6 +60,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     const [newTaskAssignee, setNewTaskAssignee] = useState('');
     const [newTaskDueDate, setNewTaskDueDate] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const { showToast } = useVisualFeedback();
 
     const projectTasks = tasks.filter(t => t.projectId === project.id);
     const projectActivities = activities.filter(a => a.projectId === project.id);
@@ -96,9 +103,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             setNewTaskPriority('medium');
             setNewTaskAssignee('');
             setNewTaskDueDate('');
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error in handleCreateTask:', err);
-            alert('Error al crear la tarea: ' + (err as Error).message);
+            showToast('Error al crear tarea', err.message || 'No se pudo generar el issue.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -175,8 +182,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                                     type="button"
                                                     onClick={() => setNewTaskPriority(p)}
                                                     className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${newTaskPriority === p
-                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100'
-                                                            : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200 hover:text-indigo-600'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100'
+                                                        : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200 hover:text-indigo-600'
                                                         }`}
                                                 >
                                                     {p}
@@ -392,7 +399,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
                     <div className="animate-slide-up">
                         {activeTab === 'tasks' ? (
-                            <TaskList tasks={projectTasks} onSelectTask={onSelectTask} />
+                            <TaskList
+                                tasks={projectTasks}
+                                projects={projects}
+                                onSelectTask={onSelectTask}
+                                onDeleteTask={onDeleteTask}
+                            />
                         ) : activeTab === 'history' ? (
                             <div className="space-y-6 max-w-4xl">
                                 {projectActivities.length > 0 ? projectActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((activity) => (
