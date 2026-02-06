@@ -75,21 +75,24 @@ const App: React.FC = () => {
   const fetchFullProfile = async (userId: string) => {
     try {
       // 1. Fetch the user profile
-      const { data: prof, error: profErr } = await supabase
+      const { data: profData, error: profErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .limit(1);
 
       if (profErr) throw profErr;
+      const prof = profData && profData.length > 0 ? profData[0] : null;
 
       if (prof) {
         // 2. Fetch the default permissions for this user's role
-        const { data: rolePerms } = await supabase
+        const { data: rolePermsData } = await supabase
           .from('role_permissions')
           .select('permissions')
           .eq('role', prof.role || 'user')
-          .single();
+          .limit(1);
+
+        const rolePerms = rolePermsData && rolePermsData.length > 0 ? rolePermsData[0] : null;
 
         // 3. Merge: Start with role defaults, then apply user-specific overrides
         const finalPermissions = {
@@ -242,9 +245,10 @@ const App: React.FC = () => {
   };
 
   const handleCreateIssue = async (projectId: string, title: string, description: string, priority: Priority = 'medium', assignees: string[] = [], dueDate: string = '') => {
-    const { data: issue, error } = await supabase.from('issues').insert([{
+    const { data: issueData, error } = await supabase.from('issues').insert([{
       project_id: projectId, title, description, status: 'todo', priority, assigned_to: assignees, due_date: dueDate || null
-    }]).select().single();
+    }]).select().limit(1);
+    const issue = issueData && issueData.length > 0 ? issueData[0] : null;
     if (issue) {
       await supabase.from('activities').insert([{ project_id: projectId, issue_id: issue.id, action: 'issue_created', details: { title: issue.title } }]);
       await fetchData();
@@ -253,7 +257,8 @@ const App: React.FC = () => {
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
-    const { data: project } = await supabase.from('projects').insert([{ name: newProjectName.trim(), repository_url: newProjectRepo.trim(), status: 'active', progress: 0 }]).select().single();
+    const { data: projectData } = await supabase.from('projects').insert([{ name: newProjectName.trim(), repository_url: newProjectRepo.trim(), status: 'active', progress: 0 }]).select().limit(1);
+    const project = projectData && projectData.length > 0 ? projectData[0] : null;
     if (project) {
       await supabase.from('activities').insert([{ project_id: project.id, action: 'project_created', details: { name: project.name } }]);
       setIsCreateProjectOpen(false); setNewProjectName(''); setNewProjectRepo(''); await fetchData();
@@ -261,7 +266,8 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
-    const { data: task } = await supabase.from('issues').update({ status: newStatus }).eq('id', taskId).select('project_id, title').single();
+    const { data: taskData } = await supabase.from('issues').update({ status: newStatus }).eq('id', taskId).select('project_id, title').limit(1);
+    const task = taskData && taskData.length > 0 ? taskData[0] : null;
     if (task) {
       await supabase.from('activities').insert([{ project_id: task.project_id, issue_id: taskId, action: 'status_updated', details: { title: task.title, status: newStatus } }]);
       await fetchData(true);

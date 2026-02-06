@@ -73,13 +73,14 @@ const WhiteboardList: React.FC<WhiteboardListProps> = ({ projectId }) => {
                     data: {}
                 }])
                 .select()
-                .single();
+                .limit(1);
 
             if (error) throw error;
+            const createdBoard = data && data.length > 0 ? data[0] : null;
             setIsCreateOpen(false);
             setNewName('');
             await fetchWhiteboards();
-            showToast('Pizarra creada', `Se ha generado el lienzo "${data?.name}" exitosamente.`, 'success');
+            showToast('Pizarra creada', `Se ha generado el lienzo "${createdBoard?.name}" exitosamente.`, 'success');
         } catch (error: any) {
             console.error('Error creating whiteboard:', error);
             showToast('Error', error.message || 'No se pudo crear la pizarra.', 'error');

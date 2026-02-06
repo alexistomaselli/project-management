@@ -30,12 +30,14 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                 .from('whiteboards')
                 .select('data')
                 .eq('id', initialWhiteboard.id)
-                .single();
+                .limit(1);
 
             if (error) throw error;
-            if (data?.data && editorRef.current) {
+            const singleData = data && data.length > 0 ? data[0] : null;
+
+            if (singleData?.data && editorRef.current) {
                 console.group('Whiteboard Sync');
-                const rawData = data.data;
+                const rawData = singleData.data;
                 let snapshotToLoad: any = null;
 
                 // Flexible extraction of the tldraw snapshot structure
