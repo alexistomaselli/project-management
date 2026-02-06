@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Project, Task, Activity, Priority } from '../types';
+import { supabase } from '../services/supabase';
 import {
     ArrowLeft,
     Layers,
@@ -19,12 +19,19 @@ import {
     X,
     Layout,
     User,
-    Flag
+    Flag,
+    Palette,
+    FileText
 } from 'lucide-react';
 import TaskList from './TaskList';
 import RoadmapView from './RoadmapView';
+import WhiteboardList from './WhiteboardList';
+import DocumentList from './DocumentList';
+import DocumentEditor from './DocumentEditor';
+import { Project, Task, Activity, Priority, Profile, ProjectDoc } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVisualFeedback } from '../context/VisualFeedbackContext';
+import { createPortal } from 'react-dom';
 
 interface ProjectDetailProps {
     project: Project;
@@ -36,6 +43,7 @@ interface ProjectDetailProps {
     onDelete?: () => void;
     onDeleteTask?: (taskId: string) => Promise<void>;
     onCreateIssue: (projectId: string, title: string, description: string, priority: Priority, assignees: string[], dueDate: string) => void;
+    onRenameProject: (projectId: string, newName: string) => Promise<void>;
 }
 
 const ProjectDetail: React.FC<ProjectDetailProps> = ({
@@ -47,10 +55,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     onSelectTask,
     onDelete,
     onDeleteTask,
-    onCreateIssue
+    onCreateIssue,
+    onRenameProject
 }) => {
-    const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'roadmap'>('tasks');
+    const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'roadmap' | 'whiteboard' | 'docs'>('tasks');
+    const [selectedDoc, setSelectedDoc] = useState<ProjectDoc | null>(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState(project.name);
+
     const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
 
     // New task form state
@@ -59,6 +72,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
     const [newTaskAssignee, setNewTaskAssignee] = useState('');
     const [newTaskDueDate, setNewTaskDueDate] = useState('');
+    const [projectUsers, setProjectUsers] = useState<Profile[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { showToast } = useVisualFeedback();
@@ -70,8 +84,56 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     useEffect(() => {
         if (isCreateTaskOpen) {
             console.log('✅ Modal de tarea abierto');
+            fetchProjectUsers();
         }
     }, [isCreateTaskOpen]);
+
+    const fetchProjectUsers = async () => {
+        // 1. Fetch all superadmins globally
+        const { data: superAdmins } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'superadmin');
+
+        // 2. Fetch users via project_teams -> team_members
+        const { data: teamData } = await supabase
+            .from('project_teams')
+            .select(`
+                team_id,
+                teams (
+                    team_members (
+                        profiles (*)
+                    )
+                )
+            `)
+            .eq('project_id', project.id);
+
+        const users: Profile[] = [];
+        const seen = new Set();
+
+        // Add superadmins first
+        if (superAdmins) {
+            superAdmins.forEach(u => {
+                if (!seen.has(u.id)) {
+                    users.push(u);
+                    seen.add(u.id);
+                }
+            });
+        }
+
+        // Add team members
+        if (teamData) {
+            teamData.forEach((pTeam: any) => {
+                pTeam.teams?.team_members?.forEach((member: any) => {
+                    if (member.profiles && !seen.has(member.profiles.id)) {
+                        users.push(member.profiles);
+                        seen.add(member.profiles.id);
+                    }
+                });
+            });
+        }
+        setProjectUsers(users);
+    };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -111,8 +173,36 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
         }
     };
 
+    useEffect(() => {
+        setEditedName(project.name);
+    }, [project.name]);
+
+
+    const handleRename = async () => {
+        if (!editedName.trim() || editedName === project.name) {
+            setIsEditingName(false);
+            return;
+        }
+
+        try {
+            await onRenameProject(project.id, editedName.trim());
+            setIsEditingName(false);
+            showToast('Proyecto Renombrado', 'El nombre se actualizó correctamente.', 'success');
+        } catch (err: any) {
+            console.error('Error renaming project:', err);
+            showToast('Error', 'No se pudo renombrar el proyecto.', 'error');
+        }
+    };
+
     return (
         <div className="space-y-10 animate-fadeIn relative">
+            {selectedDoc && createPortal(
+                <DocumentEditor
+                    doc={selectedDoc}
+                    onBack={() => setSelectedDoc(null)}
+                />,
+                document.body
+            )}
             {/* Create Task Modal */}
             <AnimatePresence>
                 {isCreateTaskOpen && (
@@ -206,16 +296,21 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                     </div>
 
                                     <div className="col-span-2">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Responsables (Separar por coma)</label>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Responsable</label>
                                         <div className="relative">
                                             <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                type="text"
+                                            <select
                                                 value={newTaskAssignee}
                                                 onChange={(e) => setNewTaskAssignee(e.target.value)}
-                                                placeholder="Ej: Alex, Mario, Juan"
-                                                className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-12 pr-6 py-3 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
-                                            />
+                                                className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-12 pr-6 py-3 text-sm font-bold text-slate-800 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all"
+                                            >
+                                                <option value="">Sin asignar</option>
+                                                {projectUsers.map(u => (
+                                                    <option key={u.id} value={u.full_name || u.email}>
+                                                        {u.full_name || u.email.split('@')[0]}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -278,6 +373,17 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
+                                        setIsEditingName(true);
+                                        setEditedName(project.name);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    <span>Renombrar Proyecto</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
                                         onDelete?.();
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
@@ -321,9 +427,21 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                         <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-200">
                             <Layers className="w-10 h-10" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                                <h2 className="text-4xl font-extrabold text-slate-900">{project.name}</h2>
+                                {isEditingName ? (
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={editedName}
+                                        onChange={(e) => setEditedName(e.target.value)}
+                                        onBlur={handleRename}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+                                        className="text-4xl font-extrabold text-slate-900 bg-transparent border-b-2 border-indigo-500 outline-none w-full max-w-md"
+                                    />
+                                ) : (
+                                    <h2 className="text-4xl font-extrabold text-slate-900">{project.name}</h2>
+                                )}
                                 <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-[10px] font-black uppercase tracking-widest">
                                     {getStatusIcon(project.status)}
                                     <span>{project.status.replace('_', ' ')}</span>
@@ -377,6 +495,24 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                 className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'roadmap' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 Hoja de Ruta (Timeline)
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('whiteboard')}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'whiteboard' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Palette className="w-4 h-4" />
+                                    <span>Pizarras</span>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('docs')}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'docs' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    <span>Documentos</span>
+                                </div>
                             </button>
                         </div>
 
@@ -447,8 +583,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                                     {activity.action === 'status_updated' && activity.details?.new_status ?
                                                         `El estado cambió a "${activity.details.new_status}"` :
                                                         activity.action === 'issue_created' ? 'Se creó una nueva tarea para el equipo.' :
-                                                            activity.action === 'commented' ? 'Se agregó un nuevo comentario con feedback.' :
-                                                                'Actividad general registrada en el sistema.'}
+                                                            activity.action === 'doc_created' ? `Se creó el documento "${activity.details?.title || 'Sin título'}".` :
+                                                                activity.action === 'doc_updated' ? `Se actualizó el contenido de "${activity.details?.title || 'Sin título'}".` :
+                                                                    activity.action === 'commented' ? 'Se agregó un nuevo comentario con feedback.' :
+                                                                        'Actividad general registrada en el sistema.'}
                                                 </p>
                                             </div>
                                         </div>
@@ -463,6 +601,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                                     </div>
                                 )}
                             </div>
+                        ) : activeTab === 'whiteboard' ? (
+                            <WhiteboardList projectId={project.id} />
+                        ) : activeTab === 'docs' ? (
+                            <DocumentList
+                                projectId={project.id}
+                                onSelectDoc={(doc) => setSelectedDoc(doc)}
+                            />
                         ) : (
                             <RoadmapView tasks={projectTasks} activities={projectActivities} onSelectTask={onSelectTask} />
                         )}

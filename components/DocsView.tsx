@@ -59,6 +59,25 @@ const DocsView: React.FC = () => {
                 content: "Contenido del comentario"
             },
             example: 'Añade un comentario al issue del login diciendo que el fix ya está en producción'
+        },
+        {
+            name: "add_project_doc",
+            description: "Crea un nuevo documento de texto (Markdown) para un proyecto (ej: alcances, minutas).",
+            params: {
+                project_name: "Nombre del proyecto",
+                title: "Título del documento",
+                content: "Contenido inicial en Markdown",
+                doc_type: "draft | scope | technical | meeting"
+            },
+            example: 'Crea un documento de tipo scope para el proyecto Logística titulado "Alcance Fase 1"'
+        },
+        {
+            name: "list_project_docs",
+            description: "Lista todos los documentos (alcances, minutas, etc) de un proyecto.",
+            params: {
+                project_name: "Nombre del proyecto"
+            },
+            example: 'Muéstrame los documentos del proyecto Logística'
         }
     ];
 

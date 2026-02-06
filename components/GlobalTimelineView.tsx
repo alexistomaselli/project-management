@@ -17,7 +17,8 @@ import {
     Rocket,
     RefreshCw,
     Layers,
-    Layout
+    Layout,
+    FileText
 } from 'lucide-react';
 
 interface GlobalTimelineViewProps {
@@ -100,6 +101,8 @@ const GlobalTimelineView: React.FC<GlobalTimelineViewProps> = ({ activities }) =
             case 'commented': return <MessageSquare className="w-4 h-4 text-blue-500" />;
             case 'project_created': return <Rocket className="w-4 h-4 text-indigo-500" />;
             case 'task_updated': return <Layout className="w-4 h-4 text-violet-500" />;
+            case 'doc_created': return <FileText className="w-4 h-4 text-emerald-500" />;
+            case 'doc_updated': return <FileText className="w-4 h-4 text-indigo-500" />;
             default: return <ActivityIcon className="w-4 h-4 text-slate-400" />;
         }
     };
@@ -180,8 +183,9 @@ const GlobalTimelineView: React.FC<GlobalTimelineViewProps> = ({ activities }) =
 
                                             {/* Timeline Node */}
                                             <div className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-white shadow-xl z-40 transition-all group-hover:scale-125 ${event.action === 'project_created' ? 'bg-indigo-600' :
-                                                    event.action === 'issue_created' ? 'bg-emerald-500' :
-                                                        event.action === 'status_updated' ? 'bg-amber-500' : 'bg-blue-500'
+                                                event.action === 'issue_created' || event.action === 'doc_created' ? 'bg-emerald-500' :
+                                                    event.action === 'status_updated' ? 'bg-amber-500' :
+                                                        event.action === 'doc_updated' ? 'bg-indigo-500' : 'bg-blue-500'
                                                 }`}></div>
 
                                             {/* Minimalist Premium Card */}
