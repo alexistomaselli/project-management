@@ -23,12 +23,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [config, setConfig] = useState({
-        mode: 'deterministic',
-        provider: 'openai',
-        model_name: 'gpt-4o',
-        api_key: ''
+    const [config, setConfig] = useState(() => {
+        const saved = localStorage.getItem('dyd_settings_draft');
+        if (saved) return JSON.parse(saved);
+        return {
+            mode: 'deterministic',
+            provider: 'openai',
+            model_name: 'gpt-4o',
+            api_key: '',
+            notebooklm_id: '',
+            notebooklm_cookies: ''
+        };
     });
+
+    useEffect(() => {
+        localStorage.setItem('dyd_settings_draft', JSON.stringify(config));
+    }, [config]);
+
     const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
     const providerModels: Record<string, string[]> = {
@@ -47,12 +58,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                 .eq('user_id', profile.id)
                 .maybeSingle();
 
-            if (data) {
+            // Override config ONLY if we haven't typed anything meaningful yet OR if we don't have a local draft
+            const isConfigEmpty = !config.api_key && !config.notebooklm_id && !config.notebooklm_cookies;
+
+            if (data && (isConfigEmpty || !localStorage.getItem('dyd_settings_draft'))) {
                 setConfig({
                     mode: data.mode,
                     provider: data.provider,
                     model_name: data.model_name,
-                    api_key: data.api_key || ''
+                    api_key: data.api_key || '',
+                    notebooklm_id: data.notebooklm_id || '',
+                    notebooklm_cookies: data.notebooklm_cookies || ''
                 });
             }
             setLoading(false);
@@ -116,6 +132,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                 provider: config.provider,
                 model_name: config.model_name,
                 api_key: config.api_key,
+                notebooklm_id: config.notebooklm_id,
+                notebooklm_cookies: config.notebooklm_cookies,
                 updated_at: new Date().toISOString()
             }, {
                 onConflict: 'user_id'
@@ -124,6 +142,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
         setSaving(false);
         if (!error) {
             setSuccess(true);
+            localStorage.removeItem('dyd_settings_draft');
             setTimeout(() => setSuccess(false), 3000);
         } else {
             console.error("Save error:", error);
@@ -265,13 +284,51 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                                         value={config.api_key}
                                         onChange={(e) => setConfig(prev => ({ ...prev, api_key: e.target.value }))}
                                         placeholder="sk-..."
-                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all pr-12"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl px-5 py-3.5 text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all pr-12"
                                     />
                                     <ShieldCheck className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
                                 </div>
                             </div>
                         </motion.section>
                     )}
+
+                    {/* NotebookLM Configuration Section */}
+                    <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-extrabold text-slate-800 flex items-center gap-2 tracking-tight">
+                                <Bot className="w-5 h-5 text-indigo-500" />
+                                NotebookLM Connection
+                                <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full uppercase font-black">Experimental</span>
+                            </h2>
+                        </div>
+
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            Vincula tu instancia de NotebookLM para dotar a la IA de contexto profundo sobre tus documentos. Requiere los tokens de sesión de tu navegador.
+                        </p>
+
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Notebook ID (Opcional)</label>
+                            <input
+                                type="text"
+                                value={config.notebooklm_id || ''}
+                                onChange={(e) => setConfig(prev => ({ ...prev, notebooklm_id: e.target.value }))}
+                                placeholder="ID del cuaderno principal..."
+                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl px-5 py-3.5 text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Google Cookies (JSON)</label>
+                            <textarea
+                                value={config.notebooklm_cookies || ''}
+                                onChange={(e) => setConfig(prev => ({ ...prev, notebooklm_cookies: e.target.value }))}
+                                placeholder='[{"name": "SID", "value": "..."}, ...]'
+                                rows={3}
+                                className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl px-5 py-3.5 text-[10px] font-mono focus:bg-white focus:border-indigo-200 outline-none transition-all"
+                            />
+                            <p className="text-[9px] text-slate-400 mt-1 italic">Vuelca aquí el export de cookies de tu navegador con acceso a notebooklm.google.com</p>
+                        </div>
+                    </section>
                 </div>
 
                 <div className="space-y-6">

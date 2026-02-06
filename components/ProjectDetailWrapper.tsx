@@ -11,6 +11,7 @@ interface ProjectDetailWrapperProps {
     onDeleteProject: (id: string) => void;
     onCreateIssue: (projectId: string, title: string, description: string, priority: Priority, assignees: string[], dueDate: string) => void;
     onDeleteTask: (taskId: string) => Promise<void>;
+    onRenameProject: (projectId: string, newName: string) => Promise<void>;
 }
 
 const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
@@ -19,7 +20,8 @@ const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
     activities,
     onDeleteProject,
     onCreateIssue,
-    onDeleteTask
+    onDeleteTask,
+    onRenameProject
 }) => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
@@ -50,6 +52,7 @@ const ProjectDetailWrapper: React.FC<ProjectDetailWrapperProps> = ({
             onDelete={() => onDeleteProject(project.id)}
             onCreateIssue={onCreateIssue}
             onDeleteTask={onDeleteTask}
+            onRenameProject={onRenameProject}
         />
     );
 };

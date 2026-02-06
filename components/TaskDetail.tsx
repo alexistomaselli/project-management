@@ -1,7 +1,9 @@
 
 import React from 'react';
-import { Task, Project, Comment, TaskStatus, Activity } from '../types';
+import { Task, Project, Comment, TaskStatus, Activity, Priority, Profile, IssueAttachment } from '../types';
 import { supabase } from '../services/supabase';
+import { useVisualFeedback } from '../context/VisualFeedbackContext';
+import TaskAttachments from './TaskAttachments';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -13,7 +15,6 @@ import {
     Flag,
     MessageSquare,
     MoreVertical,
-    Paperclip,
     Share2,
     Layers,
     Circle,
@@ -38,6 +39,111 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
     const [isEditing, setIsEditing] = React.useState(false);
     const [editedTitle, setEditedTitle] = React.useState(task.title);
     const [editedDescription, setEditedDescription] = React.useState(task.description || '');
+    const [editedProjectId, setEditedProjectId] = React.useState(task.projectId);
+    const [editedPriority, setEditedPriority] = React.useState<Priority>(task.priority);
+    const [editedDueDate, setEditedDueDate] = React.useState(task.dueDate || '');
+    const [editedAssignee, setEditedAssignee] = React.useState(task.assignees?.[0] || '');
+    const [allProjects, setAllProjects] = React.useState<Project[]>([]);
+    const [projectUsers, setProjectUsers] = React.useState<Profile[]>([]);
+    const [attachments, setAttachments] = React.useState<IssueAttachment[]>([]);
+
+    const { showToast } = useVisualFeedback();
+
+    const fetchAttachments = async () => {
+        const { data, error } = await supabase
+            .from('issue_attachments')
+            .select('*')
+            .eq('issue_id', task.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching attachments:', error);
+            return;
+        }
+
+        setAttachments(data.map(d => ({
+            id: d.id,
+            issueId: d.issue_id,
+            projectId: d.project_id,
+            fileName: d.file_name,
+            filePath: d.file_path,
+            fileType: d.file_type,
+            fileSize: d.file_size,
+            createdAt: d.created_at,
+            createdBy: d.created_by
+        })));
+    };
+
+    React.useEffect(() => {
+        const fetchProjects = async () => {
+            const { data } = await supabase.from('projects').select('*').order('name');
+            if (data) {
+                setAllProjects(data.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    description: p.description || '',
+                    status: p.status,
+                    progress: p.progress,
+                    repository_url: p.repository_url,
+                    created_at: p.created_at,
+                    updated_at: p.updated_at
+                })));
+            }
+        };
+
+        const fetchProjectUsers = async () => {
+            if (!task.projectId) return;
+
+            // 1. Fetch all superadmins globally
+            const { data: superAdmins } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', 'superadmin');
+
+            // 2. Fetch users via project_teams -> team_members
+            const { data: teamData } = await supabase
+                .from('project_teams')
+                .select(`
+                    team_id,
+                    teams (
+                        team_members (
+                            profiles (*)
+                        )
+                    )
+                `)
+                .eq('project_id', task.projectId);
+
+            const users: Profile[] = [];
+            const seen = new Set();
+
+            // Add superadmins first
+            if (superAdmins) {
+                superAdmins.forEach(u => {
+                    if (!seen.has(u.id)) {
+                        users.push(u);
+                        seen.add(u.id);
+                    }
+                });
+            }
+
+            // Add team members
+            if (teamData) {
+                teamData.forEach((pTeam: any) => {
+                    pTeam.teams?.team_members?.forEach((member: any) => {
+                        if (member.profiles && !seen.has(member.profiles.id)) {
+                            users.push(member.profiles);
+                            seen.add(member.profiles.id);
+                        }
+                    });
+                });
+            }
+            setProjectUsers(users);
+        };
+
+        fetchProjects();
+        fetchProjectUsers();
+        fetchAttachments();
+    }, [task.projectId, task.id]);
 
     const taskComments = comments.filter(c => c.issueId === task.id);
     const taskActivities = activities.filter(a => a.issueId === task.id);
@@ -83,7 +189,11 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
                 .from('issues')
                 .update({
                     title: editedTitle.trim(),
-                    description: editedDescription.trim()
+                    description: editedDescription.trim(),
+                    project_id: editedProjectId,
+                    priority: editedPriority,
+                    due_date: editedDueDate || null,
+                    assigned_to: editedAssignee ? [editedAssignee] : []
                 })
                 .eq('id', task.id);
 
@@ -91,16 +201,17 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
 
             // Log activity
             await supabase.from('activities').insert([{
-                project_id: task.projectId,
+                project_id: editedProjectId,
                 issue_id: task.id,
                 action: 'task_updated',
                 details: {
                     title: editedTitle.trim(),
-                    changes: 'Título o descripción editados'
+                    changes: 'Campos editados desde el detalle'
                 }
             }]);
 
             setIsEditing(false);
+            showToast('Tarea actualizada', 'Los cambios se han guardado exitosamente.', 'success');
             onRefresh();
         } catch (error) {
             console.error('Error updating task:', error);
@@ -212,6 +323,58 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
                                     className="w-full text-slate-600 text-lg leading-relaxed min-h-[150px] p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500"
                                     placeholder="Descripción del issue..."
                                 />
+
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Proyecto</label>
+                                        <select
+                                            value={editedProjectId}
+                                            onChange={(e) => setEditedProjectId(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-indigo-400"
+                                        >
+                                            {allProjects.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prioridad</label>
+                                        <select
+                                            value={editedPriority}
+                                            onChange={(e) => setEditedPriority(e.target.value as Priority)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-indigo-400"
+                                        >
+                                            <option value="low">Baja</option>
+                                            <option value="medium">Media</option>
+                                            <option value="high">Alta</option>
+                                            <option value="urgent">Urgente</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vencimiento</label>
+                                        <input
+                                            type="date"
+                                            value={editedDueDate ? new Date(editedDueDate).toISOString().split('T')[0] : ''}
+                                            onChange={(e) => setEditedDueDate(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsable</label>
+                                        <select
+                                            value={editedAssignee}
+                                            onChange={(e) => setEditedAssignee(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-indigo-400"
+                                        >
+                                            <option value="">Sin asignar</option>
+                                            {projectUsers.map(u => (
+                                                <option key={u.id} value={u.full_name || u.email}>
+                                                    {u.full_name || u.email.split('@')[0]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
                                 <div className="flex gap-4">
                                     <button
                                         onClick={handleUpdateTask}
@@ -413,16 +576,12 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
                     </div>
 
                     <div className="glass-card p-8 bg-white border-slate-100">
-                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Adjuntos</h4>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                <div className="flex items-center gap-3">
-                                    <Paperclip className="w-4 h-4 text-slate-400" />
-                                    <span className="text-xs font-bold text-slate-700">error-logs.txt</span>
-                                </div>
-                                <span className="text-[10px] text-slate-400 uppercase font-black">12 KB</span>
-                            </div>
-                        </div>
+                        <TaskAttachments
+                            taskId={task.id}
+                            projectId={task.projectId}
+                            attachments={attachments}
+                            onAttachmentsChange={fetchAttachments}
+                        />
                     </div>
                 </div>
             </div>

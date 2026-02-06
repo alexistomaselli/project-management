@@ -6,9 +6,14 @@ import { Layers, MoreVertical, Calendar, Globe } from 'lucide-react';
 interface ProjectListProps {
   projects: Project[];
   onSelect: (projectId: string) => void;
+  searchQuery: string;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelect }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelect, searchQuery }) => {
+  const filteredProjects = projects.filter(p =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
       case 'active': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
@@ -21,7 +26,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelect }) => {
   return (
     <div className="space-y-8 animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {projects.map((project) => (
+        {filteredProjects.map((project) => (
           <div
             key={project.id}
             onClick={() => onSelect(project.id)}
@@ -89,10 +94,10 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelect }) => {
         ))}
       </div>
 
-      {projects.length === 0 && (
+      {filteredProjects.length === 0 && (
         <div className="flex flex-col items-center justify-center p-20 bg-white border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400">
           <Layers className="w-12 h-12 mb-4 opacity-20" />
-          <p className="font-bold">No hay proyectos activos.</p>
+          <p className="font-bold">{searchQuery ? 'No se encontraron proyectos para tu búsqueda.' : 'No hay proyectos activos.'}</p>
           <p className="text-sm">Usa el comando "add_project" en el chat MCP para empezar.</p>
         </div>
       )}

@@ -145,7 +145,6 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
         const text = textOverride || inputValue.trim();
         if (!text || isTyping || !profile?.id) return;
 
-        // 2. Guardar mensaje del usuario en el historial central (DB)
         await supabase.from('ai_chat_history').insert([{
             user_id: profile.id,
             session_id: currentSessionId,
@@ -158,7 +157,6 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
         setIsTyping(true);
 
         try {
-            // 1. Obtener la memoria más fresca de la DB (Contexto Real)
             const { data: memory } = await supabase
                 .from('ai_memories')
                 .select('*')
@@ -167,7 +165,6 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                 .limit(1)
                 .maybeSingle();
 
-            // Refresh config to ensure latest API Key is used
             const { data: currentConfig } = await supabase
                 .from('ai_config')
                 .select('*')
@@ -185,7 +182,7 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                     });
 
                     if (error) throw new Error(error.message);
-                    if (!data?.response) throw new Error(data?.error || 'No hay respuesta del cerebro (posible timeout)');
+                    if (!data?.response) throw new Error(data?.error || 'No hay respuesta del cerebro');
 
                     const aiMsg = data.response;
                     await supabase.from('ai_chat_history').insert([{
@@ -198,216 +195,166 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                     setMessages(prev => [...prev, { role: 'assistant', content: aiMsg, timestamp: new Date() }]);
                     setIsTyping(false);
 
-                    // Si el mensaje indica un éxito real de creación o modificación, refrescamos la UI global
                     const normalizedMsg = aiMsg.toLowerCase();
                     const triggerKeywords = ['exito', 'éxito', 'creada', 'actualizada', 'confirmado', 'completada', 'eliminada', 'borrada'];
                     if (triggerKeywords.some(kw => normalizedMsg.includes(kw))) {
                         if (onRefresh) (onRefresh as any)(true);
                     }
-
                     return;
                 } catch (err: any) {
                     console.error("Error calling AI Brain:", err);
-                    const errMsg = `⚠️ El Core AI tuvo un problema: ${err.message}. Revisa tu API Key en Configuración.`;
+                    const errMsg = `⚠️ El Core AI tuvo un problema: ${err.message}`;
                     setMessages(prev => [...prev, { role: 'assistant', content: errMsg, timestamp: new Date() }]);
                     setIsTyping(false);
                     return;
                 }
             }
 
-            // --- CASO B: MODO DETERMINISTICO (IA MCP LOCAL) ---
-            // ENGINE CORE: Simulación avanzada de procesamiento
+            // --- CASO B: MODO DETERMINISTICO ---
             setTimeout(async () => {
                 let response = "";
                 const lowerText = text.toLowerCase().trim();
                 let nextAction = null;
                 let nextData = null;
 
-                // --- NIVEL 1: LOGICA DE CONTEXTO (ESTADOS PENDIENTES) ---
                 if (memory?.current_action === 'awaiting_confirmation') {
-                    if (['si', 'yes', 'confirmado', 'procede', 'dale', 'adelante', 'ok'].some(k => lowerText.includes(k))) {
-                        // Aquí procesamos la acción que estaba pendiente de confirmación
+                    if (['si', 'yes', 'confirmado', 'procede', 'ok'].some(k => lowerText.includes(k))) {
                         const lastCommand = memory.context_data?.command;
                         if (lastCommand === 'list_projects') {
                             const projectList = projects.map(p => `- **${p.name}** [${p.status}]`).join('\n');
-                            response = `🏗️ **Infraestructura del Servidor DyD Labs:**\n\n${projectList}\n\nOperación completada exitosamente.`;
-                        } else if (lastCommand === 'list_tasks') {
-                            const pendingTasks = tasks.filter(t => t.status !== 'done').slice(0, 10);
-                            const taskList = pendingTasks.map(t => `- **${t.title}** [${t.status}]`).join('\n');
-                            response = `📋 **Backlog del Servidor:**\n\n${taskList || '_No hay tareas pendientes._'}`;
+                            response = `🏗️ **Infraestructura:**\n\n${projectList}`;
                         } else {
-                            response = "✅ ¡Confirmado! He procesado tu solicitud en el servidor central.";
+                            response = "✅ ¡Confirmado! He procesado tu solicitud.";
                         }
                         await supabase.from('ai_memories').delete().eq('session_id', currentSessionId);
                     } else {
-                        response = "Operación cancelada. ¿Hay algo más que desees que supervise?";
+                        response = "Operación cancelada.";
                         await supabase.from('ai_memories').delete().eq('session_id', currentSessionId);
                     }
                 }
                 else if (memory?.current_action === 'awaiting_assignment') {
                     const taskId = memory.context_data?.task_id;
                     const taskTitle = memory.context_data?.title;
-
-                    const { error: updateError } = await supabase
-                        .from('issues')
-                        .update({ assigned_to: [text] })
-                        .eq('id', taskId);
-
-                    if (!updateError) {
-                        response = `🎯 **Proceso Finalizado:** He asignado a **"${text}"** como responsable de **"${taskTitle}"**.\n\n¿Necesitas algo más?`;
+                    const { error } = await supabase.from('issues').update({ assigned_to: [text] }).eq('id', taskId);
+                    if (!error) {
+                        response = `🎯 Asignado **"${text}"** a **"${taskTitle}"**.`;
                         await supabase.from('ai_memories').delete().eq('session_id', currentSessionId);
                     } else {
-                        response = `❌ No pude completar la asignación: ${updateError.message}`;
+                        response = `❌ Error: ${error.message}`;
                     }
                 }
                 else if (memory?.current_action === 'awaiting_project') {
                     const lastOptions = memory.context_data?.last_options || [];
-                    let selectedProject = null;
-
-                    const ordinalMap: { [key: string]: number } = {
-                        'primero': 0, '1': 0, '1ro': 0, 'uno': 0,
-                        'segundo': 1, '2': 1, '2do': 1, 'dos': 1,
-                        'tercero': 2, '3': 2, '3ro': 2, 'tres': 2
-                    };
-
-                    const indexByWord = ordinalMap[lowerText] ?? -1;
-                    const indexByDirectNum = parseInt(lowerText) - 1;
-                    const finalIndex = indexByWord >= 0 ? indexByWord : indexByDirectNum;
-
-                    if (finalIndex >= 0 && lastOptions[finalIndex]) {
-                        const projectName = lastOptions[finalIndex];
-                        selectedProject = projects.find(p => p.name === projectName);
-                    } else {
-                        selectedProject = projects.find(p => p.name.toLowerCase().includes(lowerText.replace('en el ', '').trim()));
-                    }
+                    const ordinalMap: any = { 'primero': 0, '1': 0, 'segundo': 1, '2': 1, 'tercero': 2, '3': 2 };
+                    const idx = ordinalMap[lowerText] ?? (parseInt(lowerText) - 1);
+                    let selectedProject = (idx >= 0 && lastOptions[idx]) ? projects.find(p => p.name === lastOptions[idx]) : projects.find(p => p.name.toLowerCase().includes(lowerText));
 
                     if (selectedProject) {
                         const title = memory.context_data?.title || 'Nueva Tarea';
-                        const { data: newTask, error: insertError } = await supabase.from('issues').insert([{
-                            project_id: selectedProject.id,
-                            title: title,
-                            status: 'todo'
-                        }]).select().single();
-
-                        if (!insertError && newTask) {
-                            response = `✅ Tarea **"${title}"** creada exitosamente en **${selectedProject.name}**.\n\n¿A quién deseas que se la asigne?`;
+                        const { data: nt, error } = await supabase.from('issues').insert([{ project_id: selectedProject.id, title, status: 'todo' }]).select().single();
+                        if (!error && nt) {
+                            response = `✅ Tarea creada en **${selectedProject.name}**. ¿A quién se la asigno?`;
                             nextAction = 'awaiting_assignment';
-                            nextData = { title, task_id: newTask.id };
+                            nextData = { title, task_id: nt.id };
                         } else {
-                            response = `⚠️ Error al crear: ${insertError?.message}`;
+                            response = `⚠️ Error: ${error?.message}`;
                         }
                     } else {
-                        response = `No pude encontrar el proyecto "${text}". Por favor, dime el número de la lista o el nombre exacto.`;
+                        response = "No encontré el proyecto. Dime el nombre exacto.";
                         nextAction = 'awaiting_project';
                         nextData = memory.context_data;
                     }
                 }
-                // --- NIVEL 2: COMANDOS DIRECTOS (IA MCP) ---
+                else if (memory?.current_action === 'awaiting_project_doc') {
+                    const lastOptions = memory.context_data?.last_options || [];
+                    const ordinalMap: any = { 'primero': 0, '1': 0, 'segundo': 1, '2': 1 };
+                    const idx = ordinalMap[lowerText] ?? (parseInt(lowerText) - 1);
+                    let selectedProject = (idx >= 0 && lastOptions[idx]) ? projects.find(p => p.name === lastOptions[idx]) : projects.find(p => p.name.toLowerCase().includes(lowerText));
+
+                    if (selectedProject) {
+                        const title = memory.context_data?.title || 'Nuevo Documento';
+                        const docType = memory.context_data?.docType || 'draft';
+                        const { data: nd, error } = await supabase.from('project_docs').insert([{ project_id: selectedProject.id, title, content: '# ' + title, type: docType }]).select().single();
+                        if (!error && nd) {
+                            response = `✅ Documento **"${title}"** creado en **${selectedProject.name}**.`;
+                            await supabase.from('ai_memories').delete().eq('session_id', currentSessionId);
+                        } else {
+                            response = `⚠️ Error: ${error?.message}`;
+                        }
+                    } else {
+                        response = "No encontré el proyecto. Dime el nombre exacto.";
+                        nextAction = 'awaiting_project_doc';
+                        nextData = memory.context_data;
+                    }
+                }
                 else {
-                    const isTaskQuery = /(tarea|task|issue|backlog|pendiente)/i.test(lowerText);
-                    const isProjectQuery = /(nuevo|agrega|crea)\s+(proyecto|proeycto|project|infraestructura)/i.test(lowerText); // Updated regex
-                    const isCreation = /(crea|nuevo|new|genera|agrega)/i.test(lowerText);
+                    const isDoc = /(documento|doc|archivo|alcance|minuta|requerimiento|technical|scope|técnico)/i.test(lowerText);
+                    const isTask = /(tarea|task|issue|backlog|pendiente)/i.test(lowerText);
+                    const isCreation = /(crea|nuevo|new|genera|agrega|crear|añadir)/i.test(lowerText);
 
-                    if (isCreation && isTaskQuery) {
-                        const titleMatch = text.match(/tarea\s+"?([^"]+)"?/i) || text.match(/task\s+"?([^"]+)"?/i) || text.match(/llamada\s+"?([^"]+)"?/i);
-                        const title = titleMatch ? titleMatch[1] : 'Nueva Tarea';
+                    if (isCreation && isDoc) {
+                        const titleMatch = text.match(/(?:documento|doc|llamado|alcance|minuta|archivo|llamada)\s+["']?([^"']+)["']?/i);
+                        let title = titleMatch ? titleMatch[1].trim() : 'Documento IA';
+                        let docType = 'draft';
+                        if (lowerText.includes('alcance') || lowerText.includes('scope')) docType = 'scope';
+                        else if (lowerText.includes('tecnico') || lowerText.includes('technical')) docType = 'technical';
 
-                        const projectMatch = text.match(/proyecto\s+"?([^"]+)"?/i);
-                        const priorityMatch = text.match(/prioridad\s+(low|medium|high|urgent)/i);
-                        const dateMatch = text.match(/para\s+el\s+([0-9-]{10})/i);
-
-                        const projectName = projectMatch ? projectMatch[1] : null;
-                        const targetProject = projectName ? projects.find(p => p.name.toLowerCase().includes(projectName.toLowerCase())) : null;
+                        const projectMatch = text.match(/(?:proyecto|project|en)\s+["']?([^"']+)["']?/i);
+                        const targetProject = projectMatch ? projects.find(p => p.name.toLowerCase().includes(projectMatch[1].trim().toLowerCase())) : null;
 
                         if (targetProject) {
-                            const { data: newTask, error: insertError } = await supabase.from('issues').insert([{
-                                project_id: targetProject.id,
-                                title: title,
-                                status: 'todo',
-                                priority: (priorityMatch?.[1] as any) || 'medium',
-                                due_date: dateMatch ? dateMatch[1] : null
-                            }]).select().single();
+                            const { error } = await supabase.from('project_docs').insert([{ project_id: targetProject.id, title, content: '# ' + title, type: docType }]);
+                            response = error ? `⚠️ Error: ${error.message}` : `📄 Documento **"${title}"** creado en **${targetProject.name}**.`;
+                        } else {
+                            const pNames = projects.map(p => p.name);
+                            response = `¿En qué proyecto guardo el documento **"${title}"**?\n\n` + pNames.map((n, i) => `${i + 1}. **${n}**`).join('\n');
+                            nextAction = 'awaiting_project_doc';
+                            nextData = { title, docType, last_options: pNames };
+                        }
+                    }
+                    else if (isCreation && isTask) {
+                        const titleMatch = text.match(/(?:tarea|task|llamada)\s+["']?([^"']+)["']?/i);
+                        let title = titleMatch ? titleMatch[1].trim() : 'Tarea IA';
+                        const projectMatch = text.match(/(?:proyecto|project|en)\s+["']?([^"']+)["']?/i);
+                        const targetProject = projectMatch ? projects.find(p => p.name.toLowerCase().includes(projectMatch[1].trim().toLowerCase())) : null;
 
-                            if (!insertError && newTask) {
-                                response = `✅ Tarea **"${title}"** creada en **${targetProject.name}** [Pr: ${(priorityMatch?.[1] || 'medium').toUpperCase()}]${dateMatch ? ` (Vence: ${dateMatch[1]})` : ''}.\n\n¿Deseas asignársela a alguien?`;
+                        if (targetProject) {
+                            const { data: nt, error } = await supabase.from('issues').insert([{ project_id: targetProject.id, title, status: 'todo' }]).select().single();
+                            if (!error && nt) {
+                                response = `✅ Tarea **"${title}"** creada en **${targetProject.name}**. ¿Deseas asignársela a alguien?`;
                                 nextAction = 'awaiting_assignment';
-                                nextData = { title, task_id: newTask.id };
+                                nextData = { title, task_id: nt.id };
                             } else {
-                                response = `⚠️ Error al crear: ${insertError?.message}`;
+                                response = `⚠️ Error: ${error?.message}`;
                             }
                         } else {
-                            const projectNames = projects.map(p => p.name);
-                            response = `Entendido. He capturado la tarea: **"${title}"**.\n\n¿En qué proyecto quieres ubicarla?\n\n` +
-                                projectNames.map((name, i) => `${i + 1}. **${name}**`).join('\n');
-
+                            const pNames = projects.map(p => p.name);
+                            response = `¿En qué proyecto creo la tarea **"${title}"**?\n\n` + pNames.map((n, i) => `${i + 1}. **${n}**`).join('\n');
                             nextAction = 'awaiting_project';
-                            nextData = { title, last_options: projectNames };
+                            nextData = { title, last_options: pNames };
                         }
-                    }
-                    else if (isCreation && isProjectQuery) {
-                        const rawProjectName = text.split(/llamado|llamada|proyecto|project/i).pop()?.trim().replace(/["']/g, '') || 'Nuevo Proyecto';
-                        // Clean project name from potential suffixes like "para el ..."
-                        const projectName = rawProjectName.split(/para el/i)[0].trim();
-
-                        const { data: newProject, error: projError } = await supabase.from('projects').insert([{
-                            name: projectName,
-                            status: 'active',
-                            progress: 0
-                        }]).select().single();
-
-                        if (!projError && newProject) {
-                            response = `🏗️ **Infraestructura Actualizada:** He creado el nuevo proyecto **"${projectName}"** exitosamente.\n\n¿Deseas que cree alguna tarea inicial para este proyecto?`;
-                        } else {
-                            response = `❌ Error al crear el proyecto: ${projError?.message}`;
-                        }
-                    }
-                    else if (isProjectQuery) {
-                        const projectList = projects.map(p => `- **${p.name}** [${p.status}]`).join('\n');
-                        response = `🏗️ **Infraestructura del Servidor DyD Labs:**\n\n${projectList}\n\nOperación de lectura completada.`;
-                    }
-                    else if (isTaskQuery) {
-                        const pendingTasks = tasks.filter(t => t.status !== 'done').slice(0, 5);
-                        const taskList = pendingTasks.map(t => `- **${t.title}** [${t.status}]`).join('\n');
-                        response = `📋 **Backlog del Servidor:**\n\nAquí están tus tareas pendientes prioritarias:\n\n${taskList || '_No hay tareas pendientes._'}`;
-                    }
-                    else if (/(hola|saludos|buenos|hey)/i.test(lowerText)) {
-                        response = "¡Hola! Estoy listo. Puedo operar el servidor MCP, gestionar tareas o auditar tus proyectos. ¿Por dónde empezamos?";
+                    } else if (lowerText.includes('proyecto')) {
+                        const list = projects.map(p => `- **${p.name}**`).join('\n');
+                        response = `🏗️ **Proyectos:**\n\n${list}`;
+                    } else if (lowerText.includes('tarea') || lowerText.includes('backlog')) {
+                        const list = tasks.filter(t => t.status !== 'done').slice(0, 5).map(t => `- **${t.title}**`).join('\n');
+                        response = `📋 **Pendientes:**\n\n${list || 'No hay tareas.'}`;
                     } else {
-                        response = "Comando recibido. Mi motor de IA está listo para ejecutar esta acción en el servidor MCP. ¿Confirmas que quieres proceder con la gestión de tareas?";
-                        nextAction = 'awaiting_confirmation';
-                        nextData = { command: 'generic' };
+                        response = "Hola! Soy el asistente MCP. Puedo crear tareas y documentos. ¿En qué te ayudo?";
                     }
                 }
 
-                // --- NIVEL 3: PERSISTENCIA FINAL ---
                 if (nextAction) {
-                    await supabase.from('ai_memories').upsert({
-                        user_id: profile.id,
-                        session_id: currentSessionId,
-                        current_action: nextAction,
-                        context_data: nextData,
-                        updated_at: new Date().toISOString()
-                    });
+                    await supabase.from('ai_memories').upsert({ user_id: profile.id, session_id: currentSessionId, current_action: nextAction, context_data: nextData, updated_at: new Date().toISOString() });
                 }
-                await supabase.from('ai_chat_history').insert([{
-                    user_id: profile.id,
-                    session_id: currentSessionId,
-                    role: 'assistant',
-                    content: response
-                }]);
-
+                await supabase.from('ai_chat_history').insert([{ user_id: profile.id, session_id: currentSessionId, role: 'assistant', content: response }]);
                 setMessages(prev => [...prev, { role: 'assistant', content: response, timestamp: new Date() }]);
                 setIsTyping(false);
                 if (onRefresh) (onRefresh as any)(true);
             }, 1000);
-
         } catch (err: any) {
             console.error(err);
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: `❌ Error en el Core IA: ${err.message}`,
-                timestamp: new Date()
-            }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}`, timestamp: new Date() }]);
             setIsTyping(false);
         }
     };
@@ -494,7 +441,10 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                                     ? 'bg-indigo-600 text-white rounded-tr-none'
                                     : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
                                     }`}>
-                                    <div className="prose prose-slate prose-sm max-w-none prose-headings:text-indigo-900 prose-headings:font-black prose-p:leading-relaxed prose-li:my-1 prose-strong:text-indigo-600">
+                                    <div className={`prose prose-sm max-w-none prose-p:leading-relaxed prose-li:my-1 ${msg.role === 'user'
+                                        ? 'prose-invert prose-headings:text-white prose-strong:text-white text-white'
+                                        : 'prose-slate prose-headings:text-indigo-900 prose-headings:font-black prose-strong:text-indigo-600'
+                                        }`}>
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                             {msg.content}
                                         </ReactMarkdown>

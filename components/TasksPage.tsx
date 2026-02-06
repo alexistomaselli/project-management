@@ -11,15 +11,19 @@ interface TasksPageProps {
     onSelectTask: (taskId: string) => void;
     onUpdateTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
     onDeleteTask: (taskId: string) => Promise<void>;
+    searchQuery: string;
 }
 
-const TasksPage: React.FC<TasksPageProps> = ({ tasks, projects, onSelectTask, onUpdateTaskStatus, onDeleteTask }) => {
+const TasksPage: React.FC<TasksPageProps> = ({ tasks, projects, onSelectTask, onUpdateTaskStatus, onDeleteTask, searchQuery }) => {
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
     const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
 
-    const filteredTasks = selectedProjectId === 'all'
-        ? tasks
-        : tasks.filter(t => t.projectId === selectedProjectId);
+    const filteredTasks = tasks.filter(t => {
+        const matchesProject = selectedProjectId === 'all' || t.projectId === selectedProjectId;
+        const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            t.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesProject && matchesSearch;
+    });
 
     return (
         <div className="space-y-6">
