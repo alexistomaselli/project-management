@@ -87,13 +87,14 @@ const TeamManagementView: React.FC<{ searchQuery?: string; profile: Profile | nu
         if (!newTeamName.trim() || !profile) return;
 
         try {
-            const { data: team, error } = await supabase
+            const { data: teamData, error } = await supabase
                 .from('teams')
                 .insert([{ name: newTeamName.trim() }])
                 .select()
-                .single();
+                .limit(1);
 
             if (error) throw error;
+            const team = teamData && teamData.length > 0 ? teamData[0] : null;
 
             if (team) {
                 // Auto-add creator

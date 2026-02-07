@@ -52,13 +52,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     useEffect(() => {
         const fetchConfig = async () => {
             if (!profile?.id) return;
-            const { data } = await supabase
+            const { data: configData } = await supabase
                 .from('ai_config')
                 .select('*')
                 .eq('user_id', profile.id)
-                .maybeSingle();
-
-            // Override config ONLY if we haven't typed anything meaningful yet OR if we don't have a local draft
+                .limit(1);
+            const data = configData && configData.length > 0 ? configData[0] : null; // ONLY if we haven't typed anything meaningful yet OR if we don't have a local draft
             const isConfigEmpty = !config.api_key && !config.notebooklm_id && !config.notebooklm_cookies;
 
             if (data && (isConfigEmpty || !localStorage.getItem('dyd_settings_draft'))) {

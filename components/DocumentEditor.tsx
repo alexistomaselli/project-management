@@ -57,10 +57,12 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+            const { data: profileList } = await supabase.from('profiles').select('*').eq('id', user.id).limit(1);
+            const profileData = profileList && profileList.length > 0 ? profileList[0] : null;
             setProfile(profileData);
 
-            const { data: config } = await supabase.from('ai_config').select('*').eq('user_id', user.id).maybeSingle();
+            const { data: configList } = await supabase.from('ai_config').select('*').eq('user_id', user.id).limit(1);
+            const config = configList && configList.length > 0 ? configList[0] : null;
             setAiConfig(config || { mode: 'deterministic' });
         };
         fetchAll();
@@ -453,7 +455,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
             };
 
             // Step 3: Insert into Supabase
-            const { data: board, error: bErr } = await supabase
+            const { data: boardData, error: bErr } = await supabase
                 .from('whiteboards')
                 .insert([{
                     project_id: doc.projectId,
@@ -461,9 +463,10 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                     data: whiteboardData
                 }])
                 .select()
-                .single();
+                .limit(1);
 
             if (bErr) throw bErr;
+            const board = boardData && boardData.length > 0 ? boardData[0] : null;
 
             // Record activity
             await supabase.from('activities').insert([{

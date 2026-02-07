@@ -114,7 +114,7 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
             // But let's wrap it nicely
             const finalContent = `# ${docTitle}\n\n${html}`;
 
-            const { data: newDoc, error } = await supabase
+            const { data: newDocData, error } = await supabase
                 .from('project_docs')
                 .insert([{
                     project_id: projectId,
@@ -123,22 +123,25 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
                     type: 'draft'
                 }])
                 .select()
-                .single();
+                .limit(1);
 
             if (error) throw error;
+            const newDoc = newDocData && newDocData.length > 0 ? newDocData[0] : null;
 
             showToast('DOCX Importado', `"${docTitle}" se ha cargado con éxito con sus imágenes.`, 'success');
             await fetchDocs();
-            onSelectDoc({
-                id: newDoc.id,
-                projectId: newDoc.project_id,
-                taskId: newDoc.task_id,
-                title: newDoc.title,
-                content: newDoc.content,
-                type: newDoc.type as DocType,
-                createdAt: newDoc.created_at,
-                updatedAt: newDoc.updated_at
-            });
+            if (newDoc) {
+                onSelectDoc({
+                    id: newDoc.id,
+                    projectId: newDoc.project_id,
+                    taskId: newDoc.task_id,
+                    title: newDoc.title,
+                    content: newDoc.content,
+                    type: newDoc.type as DocType,
+                    createdAt: newDoc.created_at,
+                    updatedAt: newDoc.updated_at
+                });
+            }
 
         } catch (err: any) {
             console.error('Error importing DOCX:', err);
@@ -162,35 +165,38 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
                     type: newType
                 }])
                 .select()
-                .single();
+                .limit(1);
 
             if (error) throw error;
+            const docData = data && data.length > 0 ? data[0] : null;
             setIsCreateOpen(false);
             setNewName('');
             await fetchDocs();
 
             // Record activity
-            await supabase.from('activities').insert([{
-                project_id: projectId,
-                action: 'doc_created',
-                details: {
-                    title: data.title,
-                    type: data.type,
-                    doc_id: data.id
-                }
-            }]);
+            if (docData) {
+                await supabase.from('activities').insert([{
+                    project_id: projectId,
+                    action: 'doc_created',
+                    details: {
+                        title: docData.title,
+                        type: docData.type,
+                        doc_id: docData.id
+                    }
+                }]);
 
-            showToast('Documento creado', `Se ha generado "${data?.title}" exitosamente.`, 'success');
-            onSelectDoc({
-                id: data.id,
-                projectId: data.project_id,
-                taskId: data.task_id,
-                title: data.title,
-                content: data.content,
-                type: data.type as DocType,
-                createdAt: data.created_at,
-                updatedAt: data.updated_at
-            });
+                showToast('Documento creado', `Se ha generado "${docData?.title}" exitosamente.`, 'success');
+                onSelectDoc({
+                    id: docData.id,
+                    projectId: docData.project_id,
+                    taskId: docData.task_id,
+                    title: docData.title,
+                    content: docData.content,
+                    type: docData.type as DocType,
+                    createdAt: docData.created_at,
+                    updatedAt: docData.updated_at
+                });
+            }
         } catch (error: any) {
             console.error('Error creating doc:', error);
             showToast('Error', error.message || 'No se pudo crear el documento.', 'error');

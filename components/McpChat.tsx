@@ -60,15 +60,18 @@ const McpChat: React.FC<McpChatProps> = ({
         const name = projectMatch[1];
         const repoUrl = projectMatch[2] || '';
 
-        const { data, error } = await supabase.from('projects').insert([
+        const { data: projectData, error } = await supabase.from('projects').insert([
           { name, description: 'Creado vía MCP Chat', repository_url: repoUrl, status: 'active', progress: 0 }
-        ]).select().single();
+        ]).select().limit(1);
 
         if (error) throw error;
+        const data = projectData && projectData.length > 0 ? projectData[0] : null;
 
-        await supabase.from('activities').insert([
-          { project_id: data.id, action: 'project_created', details: { name } }
-        ]);
+        if (data) {
+          await supabase.from('activities').insert([
+            { project_id: data.id, action: 'project_created', details: { name } }
+          ]);
+        }
 
         responseContent = `🚀 ¡Excelente! He creado el proyecto "${name}" correctamente. Ya puedes verlo en tu lista de proyectos.`;
       }
@@ -89,7 +92,7 @@ const McpChat: React.FC<McpChatProps> = ({
           if (found) projectId = found.id;
         }
 
-        const { data, error } = await supabase.from('issues').insert([
+        const { data: issueData, error } = await supabase.from('issues').insert([
           {
             project_id: projectId,
             title,
@@ -97,18 +100,21 @@ const McpChat: React.FC<McpChatProps> = ({
             status: 'todo',
             priority: priority
           }
-        ]).select().single();
+        ]).select().limit(1);
 
         if (error) throw error;
+        const data = issueData && issueData.length > 0 ? issueData[0] : null;
 
-        await supabase.from('activities').insert([
-          {
-            project_id: projectId,
-            issue_id: data.id,
-            action: 'issue_created',
-            details: { title, priority }
-          }
-        ]);
+        if (data) {
+          await supabase.from('activities').insert([
+            {
+              project_id: projectId,
+              issue_id: data.id,
+              action: 'issue_created',
+              details: { title, priority }
+            }
+          ]);
+        }
 
         const priorityEmoji = priority === 'urgent' ? '🚨' : priority === 'high' ? '🔥' : '✅';
         responseContent = `${priorityEmoji} Tarea "${title}" añadida con éxito (Prioridad: ${priority}). Backlog de "${projects.find(p => p.id === projectId)?.name}" actualizado.`;

@@ -200,7 +200,13 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                 </div>
             </div>
 
-            <div className="flex-1 relative w-full bg-slate-50">
+            <div
+                className="flex-1 relative w-full bg-slate-50"
+                style={{
+                    height: 'calc(100vh - 120px)', // Precise height to avoid 0px issues
+                    minHeight: '600px'
+                }}
+            >
                 <Tldraw
                     onMount={handleMount}
                     inferDarkMode={false}

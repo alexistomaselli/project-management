@@ -73,11 +73,12 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
             if (!profile?.id) return;
 
             // Cargar Config
-            const { data: config } = await supabase
+            const { data: configData } = await supabase
                 .from('ai_config')
                 .select('*')
                 .eq('user_id', profile.id)
-                .maybeSingle();
+                .limit(1);
+            const config = configData && configData.length > 0 ? configData[0] : null;
             setAiConfig(config || { mode: 'deterministic' });
 
             // Cargar Historial para la SESIÓN ACTUAL
@@ -157,19 +158,20 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
         setIsTyping(true);
 
         try {
-            const { data: memory } = await supabase
+            const { data: memoData } = await supabase
                 .from('ai_memories')
                 .select('*')
                 .eq('session_id', currentSessionId)
                 .order('updated_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+                .limit(1);
+            const memory = memoData && memoData.length > 0 ? memoData[0] : null;
 
-            const { data: currentConfig } = await supabase
+            const { data: currentConfigData } = await supabase
                 .from('ai_config')
                 .select('*')
                 .eq('user_id', profile.id)
-                .maybeSingle();
+                .limit(1);
+            const currentConfig = currentConfigData && currentConfigData.length > 0 ? currentConfigData[0] : null;
 
             if (currentConfig?.mode === 'ai' && currentConfig?.api_key) {
                 try {
@@ -251,7 +253,8 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
 
                     if (selectedProject) {
                         const title = memory.context_data?.title || 'Nueva Tarea';
-                        const { data: nt, error } = await supabase.from('issues').insert([{ project_id: selectedProject.id, title, status: 'todo' }]).select().single();
+                        const { data: ntData, error } = await supabase.from('issues').insert([{ project_id: selectedProject.id, title, status: 'todo' }]).select().limit(1);
+                        const nt = ntData && ntData.length > 0 ? ntData[0] : null;
                         if (!error && nt) {
                             response = `✅ Tarea creada en **${selectedProject.name}**. ¿A quién se la asigno?`;
                             nextAction = 'awaiting_assignment';
@@ -274,7 +277,8 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                     if (selectedProject) {
                         const title = memory.context_data?.title || 'Nuevo Documento';
                         const docType = memory.context_data?.docType || 'draft';
-                        const { data: nd, error } = await supabase.from('project_docs').insert([{ project_id: selectedProject.id, title, content: '# ' + title, type: docType }]).select().single();
+                        const { data: ndData, error } = await supabase.from('project_docs').insert([{ project_id: selectedProject.id, title, content: '# ' + title, type: docType }]).select().limit(1);
+                        const nd = ndData && ndData.length > 0 ? ndData[0] : null;
                         if (!error && nd) {
                             response = `✅ Documento **"${title}"** creado en **${selectedProject.name}**.`;
                             await supabase.from('ai_memories').delete().eq('session_id', currentSessionId);
@@ -319,7 +323,8 @@ const AiAssistantView: React.FC<AiAssistantViewProps> = ({ projects, tasks, acti
                         const targetProject = projectMatch ? projects.find(p => p.name.toLowerCase().includes(projectMatch[1].trim().toLowerCase())) : null;
 
                         if (targetProject) {
-                            const { data: nt, error } = await supabase.from('issues').insert([{ project_id: targetProject.id, title, status: 'todo' }]).select().single();
+                            const { data: ntData, error } = await supabase.from('issues').insert([{ project_id: targetProject.id, title, status: 'todo' }]).select().limit(1);
+                            const nt = ntData && ntData.length > 0 ? ntData[0] : null;
                             if (!error && nt) {
                                 response = `✅ Tarea **"${title}"** creada en **${targetProject.name}**. ¿Deseas asignársela a alguien?`;
                                 nextAction = 'awaiting_assignment';
