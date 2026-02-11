@@ -44,9 +44,11 @@ const NotificationCenter: React.FC = () => {
         fetchReminders();
         registerServiceWorker();
 
-        // Request notification permission on mount
-        if (Notification.permission === 'default') {
-            Notification.requestPermission();
+        // Request notification permission on mount (Safe check)
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            if (Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
         }
 
         // Subscribe to reminders changes
@@ -105,8 +107,8 @@ const NotificationCenter: React.FC = () => {
                             return [newR, ...prev];
                         });
 
-                        // Show browser notification
-                        if (Notification.permission === 'granted') {
+                        // Show browser notification (Safe check)
+                        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
                             try {
                                 const iconUrl = `${window.location.origin}/logo.png`;
                                 const n = new Notification(`¡Recordatorio!: ${newR.title}`, {
