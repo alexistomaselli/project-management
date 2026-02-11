@@ -10,7 +10,8 @@ import {
     Edit2,
     Clock,
     Search,
-    Loader2
+    Loader2,
+    Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteboardEditor from './WhiteboardEditor';
@@ -86,6 +87,28 @@ const WhiteboardList: React.FC<WhiteboardListProps> = ({ projectId }) => {
             showToast('Error', error.message || 'No se pudo crear la pizarra.', 'error');
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleDuplicate = async (board: Whiteboard) => {
+        try {
+            const { data, error } = await supabase
+                .from('whiteboards')
+                .insert([{
+                    project_id: projectId,
+                    name: `${board.name} (Copia)`,
+                    data: board.data
+                }])
+                .select()
+                .limit(1);
+
+            if (error) throw error;
+            const duplicatedBoard = data && data.length > 0 ? data[0] : null;
+            await fetchWhiteboards();
+            showToast('Pizarra duplicada', `Se ha creado una copia de "${board.name}".`, 'success');
+        } catch (error: any) {
+            console.error('Error duplicating whiteboard:', error);
+            showToast('Error al duplicar', error.message || 'No se pudo duplicar la pizarra.', 'error');
         }
     };
 
@@ -168,9 +191,20 @@ const WhiteboardList: React.FC<WhiteboardListProps> = ({ projectId }) => {
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            handleDuplicate(board);
+                                        }}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100"
+                                        title="Duplicar Pizarra"
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
                                             handleDelete(board.id);
                                         }}
                                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
+                                        title="Eliminar Pizarra"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>

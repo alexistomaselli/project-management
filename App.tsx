@@ -24,7 +24,8 @@ import {
   User as UserIcon,
   Sparkles,
   Video,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FileBarChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Routes, Route, Link, useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
@@ -44,6 +45,10 @@ import GlobalMediaView from './components/GlobalMediaView';
 import Auth from './components/Auth';
 import TeamManagementView from './components/TeamManagementView';
 import VideoMeetingView from './components/VideoMeetingView';
+import ReportBot from './components/ReportBot';
+import NotificationCenter from './components/NotificationCenter';
+import RemindersView from './components/RemindersView';
+import PublicReminderView from './components/PublicReminderView';
 import { Project, Task, Activity, Profile, Team, TaskStatus, Priority, Message } from './types';
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -296,7 +301,9 @@ const App: React.FC = () => {
     }
   };
 
-  if (!session) return <Auth onSuccess={() => fetchData()} />;
+  const isPublicRoute = location.pathname.startsWith('/r/');
+
+  if (!session && !isPublicRoute) return <Auth onSuccess={() => fetchData()} />;
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
@@ -317,14 +324,18 @@ const App: React.FC = () => {
           {(profile?.role === 'superadmin' || profile?.permissions?.dashboard !== false) && <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active={activeTab === 'dashboard'} to="/dashboard" onClick={() => setIsSidebarOpen(false)} />}
           {profile?.role === 'superadmin' && <NavItem icon={<Users className="w-5 h-5" />} label="Equipos" active={activeTab === 'teams'} to="/teams" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.ai) && <NavItem icon={<Sparkles className="w-5 h-5" />} label="AI Assistant" active={activeTab === 'chat'} to="/chat" onClick={() => setIsSidebarOpen(false)} />}
-          {(profile?.role === 'superadmin' || profile?.permissions?.settings) && <NavItem icon={<SettingsIcon className="w-5 h-5" />} label="Configuración" active={activeTab === 'settings'} to="/settings" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.projects !== false) && <NavItem icon={<Layers className="w-5 h-5" />} label="Proyectos" active={activeTab === 'projects'} to="/projects" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.video_calls) && <NavItem icon={<Video className="w-5 h-5" />} label="Videollamadas" active={activeTab === 'meetings'} to="/meetings" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.tasks) && <NavItem icon={<CheckSquare className="w-5 h-5" />} label="Tareas & Issues" active={activeTab === 'tasks'} to="/tasks" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.whiteboards) && <NavItem icon={<Palette className="w-5 h-5" />} label="Pizarras Globales" active={activeTab === 'whiteboards'} to="/whiteboards" onClick={() => setIsSidebarOpen(false)} />}
           <NavItem icon={<ImageIcon className="w-5 h-5" />} label="Galería" active={activeTab === 'media'} to="/media" onClick={() => setIsSidebarOpen(false)} />
+          <NavItem icon={<Bell className="w-5 h-5" />} label="Recordatorios" active={activeTab === 'reminders'} to="/reminders" onClick={() => setIsSidebarOpen(false)} />
+          {(profile?.role === 'superadmin' || profile?.permissions?.reports !== false) && <NavItem icon={<FileBarChart className="w-5 h-5" />} label="Reportes IA" active={activeTab === 'reports'} to="/reports" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.history) && <NavItem icon={<HistoryIcon className="w-5 h-5" />} label="Historial" active={activeTab === 'history'} to="/history" onClick={() => setIsSidebarOpen(false)} />}
           {(profile?.role === 'superadmin' || profile?.permissions?.docs) && <NavItem icon={<BookOpen className="w-5 h-5" />} label="Documentación" active={activeTab === 'docs'} to="/docs" onClick={() => setIsSidebarOpen(false)} />}
+
+          <div className="my-4 border-t border-slate-100" />
+          {(profile?.role === 'superadmin' || profile?.permissions?.settings) && <NavItem icon={<SettingsIcon className="w-5 h-5" />} label="Configuración" active={activeTab === 'settings'} to="/settings" onClick={() => setIsSidebarOpen(false)} />}
         </div>
 
         <div className="mt-auto pt-8">
@@ -340,7 +351,7 @@ const App: React.FC = () => {
       </nav>
 
       <main className="flex-1 lg:ml-72 p-6 lg:p-10 pb-32 w-full max-w-[100vw] overflow-x-hidden">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 animate-slide-up">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 animate-slide-up relative z-40">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-500"><Menu className="w-6 h-6" /></button>
             <div>
@@ -355,7 +366,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto">
+          <div className="flex items-center gap-3 pb-2 md:pb-0 w-full md:w-auto">
             <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-white border border-[#E2E8F0] rounded-2xl pl-10 pr-4 py-2.5 text-sm w-32 md:w-64 focus:ring-2 focus:ring-indigo-500 outline-none" />
@@ -374,6 +385,7 @@ const App: React.FC = () => {
             <button onClick={() => supabase.auth.signOut()} className="w-11 h-11 bg-white border border-[#E2E8F0] rounded-2xl flex items-center justify-center text-slate-400 hover:text-rose-600 transition-all shadow-sm group">
               <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </button>
+            <NotificationCenter />
             <button onClick={() => setIsCreateProjectOpen(true)} className="flex items-center gap-3 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all">
               <Plus className="w-4 h-4" />
               <span className="hidden md:inline">Nuevo Proyecto</span>
@@ -402,6 +414,9 @@ const App: React.FC = () => {
               <Route path="/media" element={<GlobalMediaView />} />
               <Route path="/docs" element={<DocsView />} />
               <Route path="/meetings" element={<VideoMeetingView profile={profile} userTeam={userTeam} />} />
+              <Route path="/reports" element={<ReportBot projects={projects} profile={profile} />} />
+              <Route path="/reminders" element={<RemindersView />} />
+              <Route path="/r/:id" element={<PublicReminderView />} />
               <Route path="/teams" element={profile?.role === 'superadmin' ? <TeamManagementView searchQuery={searchQuery} profile={profile} /> : <Navigate to="/dashboard" />} />
             </Routes>
           </div>
@@ -475,13 +490,15 @@ const HeaderTitle: React.FC<{ pathname: string; projects: Project[]; tasks: Task
   switch (activeTab) {
     case 'dashboard': return <>Bienvenido, Alex</>;
     case 'chat': return <>Asistente Inteligente MCP</>;
-    case 'settings': return <>Configuración Core AI</>;
+    case 'settings': return <>Configuración del Sistema</>;
     case 'teams': return <>Gestión de Equipos y Roles</>;
     case 'projects': return <>Repositorios y Proyectos</>;
     case 'tasks': return <>Backlog de Tareas</>;
     case 'whiteboards': return <>Centro de Pizarras Global</>;
     case 'media': return <>Galería de Medios</>;
     case 'docs': return <>Documentación de Comandos MCP</>;
+    case 'reports': return <>Generador de Reportes IA</>;
+    case 'reminders': return <>Centro de Recordatorios</>;
     default: return <>Historial</>;
   }
 };

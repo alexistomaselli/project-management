@@ -23,6 +23,73 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
 
     const { showToast } = useVisualFeedback();
 
+    const sanitizeRecords = useCallback((records: any[]) => {
+        return records.map(record => {
+            if (record.id && record.id.startsWith('shape:')) {
+                // Clone the record and its props to avoid mutating the original
+                const newRecord = JSON.parse(JSON.stringify(record));
+                if (newRecord.props) {
+                    // Attempt to rescue text from legacy properties
+                    if (newRecord.props.text === undefined || newRecord.props.text === '') {
+                        if (newRecord.props.richText) {
+                            if (typeof newRecord.props.richText === 'string') {
+                                newRecord.props.text = newRecord.props.richText;
+                            } else if (typeof newRecord.props.richText === 'object') {
+                                if (newRecord.props.richText.text) {
+                                    newRecord.props.text = newRecord.props.richText.text;
+                                } else if (newRecord.props.richText.type === 'doc' && newRecord.props.richText.content) {
+                                    // Deep rescue from Tiptap-like structure
+                                    let fullText = '';
+                                    const extractText = (content: any[]) => {
+                                        content.forEach(item => {
+                                            if (item.text) fullText += item.text;
+                                            if (item.content) extractText(item.content);
+                                        });
+                                    };
+                                    extractText(newRecord.props.richText.content);
+                                    newRecord.props.text = fullText;
+                                }
+                            }
+                        } else if (newRecord.props.label) {
+                            newRecord.props.text = newRecord.props.label;
+                        }
+                    }
+
+                    // Global legacy property cleanup - delete after rescuing info
+                    delete newRecord.props.richText;
+                    delete newRecord.props.label;
+
+                    // Fix image shapes
+                    if (newRecord.type === 'image') {
+                        delete newRecord.props.altText;
+                        if (newRecord.props.crop) {
+                            delete newRecord.props.crop.isCircle;
+                        }
+                    }
+
+                    // Fix geo, arrow and note shapes (ensure text property exists)
+                    if ((newRecord.type === 'geo' || newRecord.type === 'arrow' || newRecord.type === 'note') && newRecord.props.text === undefined) {
+                        newRecord.props.text = '';
+                    }
+
+                    if (newRecord.type === 'note') {
+                        delete newRecord.props.labelColor;
+                    }
+
+                    if (newRecord.type === 'arrow') {
+                        delete newRecord.props.kind;
+                        delete newRecord.props.elbowMidPoint;
+                    }
+                    // General coordinate safety
+                    if (newRecord.x === undefined) newRecord.x = 0;
+                    if (newRecord.y === undefined) newRecord.y = 0;
+                }
+                return newRecord;
+            }
+            return record;
+        });
+    }, []);
+
     const fetchLatestData = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -40,14 +107,24 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                 const rawData = singleData.data;
                 let snapshotToLoad: any = null;
 
-                // Flexible extraction of the tldraw snapshot structure
-                if (rawData.store && rawData.schema) {
-                    snapshotToLoad = rawData;
-                } else if (rawData.document && rawData.document.store) {
-                    console.log('Detected wrapped "document" structure');
-                    snapshotToLoad = rawData.document;
-                } else if (rawData.store) {
-                    snapshotToLoad = { store: rawData.store, schema: rawData.schema || { schemaVersion: 2, sequences: {} } };
+                // Improved extraction of the tldraw snapshot structure
+                let store = rawData.store;
+                let schema = rawData.schema;
+
+                if (rawData.document && rawData.document.store) {
+                    console.log('Detected legacy "document" wrapped structure');
+                    store = rawData.document.store;
+                    schema = rawData.document.schema || schema;
+                }
+
+                if (store) {
+                    // Ensure we have a valid schema structure
+                    if (!schema || !schema.schemaVersion) {
+                        console.warn('Snapshot missing or invalid schema. Using current editor schema as fallback.');
+                        // @ts-ignore
+                        schema = editorRef.current.store.schema.serialize();
+                    }
+                    snapshotToLoad = { store, schema };
                 }
 
                 if (snapshotToLoad) {
@@ -55,8 +132,31 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                     setDebugInfo(`Visto en base: ${shapes.length} formas (${shapes.slice(0, 2).join(', ')}...)`);
 
                     try {
-                        // @ts-ignore
-                        editorRef.current.loadSnapshot(snapshotToLoad);
+                        try {
+                            // @ts-ignore
+                            editorRef.current.loadSnapshot(snapshotToLoad);
+                        } catch (loadErr: any) {
+                            console.error('Initial loadSnapshot failed, attempting repair:', loadErr);
+
+                            // FAILOVER: Manual merge of records if snapshot load fails
+                            const storeRecords = snapshotToLoad.store;
+                            const cleanupRecords = Object.fromEntries(
+                                Object.entries(storeRecords).filter(([id]) =>
+                                    id.startsWith('shape:') ||
+                                    id.startsWith('asset:') ||
+                                    id.startsWith('page:') ||
+                                    id.startsWith('document:')
+                                )
+                            );
+
+                            // @ts-ignore
+                            editorRef.current.store.mergeRemoteChanges(() => {
+                                // @ts-ignore
+                                editorRef.current.store.put(sanitizeRecords(Object.values(cleanupRecords)));
+                            });
+
+                            console.log('Manual merge with sanitization completed as failover');
+                        }
 
                         if (shapes.length > 0) {
                             setTimeout(() => {
@@ -69,9 +169,9 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
 
                         setLastSaved(new Date());
                         showToast('Sincronizado', `Cargadas ${shapes.length} formas.`, 'success');
-                    } catch (loadErr: any) {
-                        console.error('Snapshot load error:', loadErr);
-                        setDebugInfo(`Error al cargar snapshot: ${loadErr.message}`);
+                    } catch (err: any) {
+                        console.error('Critical sync error:', err);
+                        setDebugInfo(`Error crítico: ${err.message}`);
                     }
                 } else {
                     setDebugInfo('No se encontró estructura compatible en el JSON');
@@ -117,11 +217,42 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
 
         if (currentData) {
             try {
-                let snapshot = currentData;
-                if (currentData.document && currentData.document.store) snapshot = currentData.document;
-                if (snapshot.store) {
-                    // @ts-ignore
-                    editor.loadSnapshot(snapshot);
+                let store = currentData.store;
+                let schema = currentData.schema;
+
+                if (currentData.document && currentData.document.store) {
+                    store = currentData.document.store;
+                    schema = currentData.document.schema || schema;
+                }
+
+                if (store) {
+                    if (!schema || !schema.schemaVersion) {
+                        // @ts-ignore
+                        schema = editor.store.schema.serialize();
+                    }
+
+                    const snapshot = { store, schema };
+                    console.log('Mount: Loading snapshot into store');
+
+                    try {
+                        // @ts-ignore
+                        editor.loadSnapshot(snapshot);
+                    } catch (err) {
+                        console.error('Mount loadSnapshot failed, attempting repair:', err);
+                        // Apply manual shape merge as fallback
+                        const shapes = Object.values(store).filter((r: any) =>
+                            r.id.startsWith('shape:') ||
+                            r.id.startsWith('asset:') ||
+                            r.id.startsWith('page:')
+                        );
+
+                        // @ts-ignore
+                        editor.store.mergeRemoteChanges(() => {
+                            // @ts-ignore
+                            editor.store.put(sanitizeRecords(shapes));
+                        });
+                    }
+
                     setTimeout(() => {
                         // @ts-ignore
                         editor.zoomToFit();
@@ -203,7 +334,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
             <div
                 className="flex-1 relative w-full bg-slate-50"
                 style={{
-                    height: 'calc(100vh - 120px)', // Precise height to avoid 0px issues
+                    height: 'calc(100vh - 120px)',
                     minHeight: '600px'
                 }}
             >
@@ -211,6 +342,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                     onMount={handleMount}
                     inferDarkMode={false}
                     autoFocus
+                    // @ts-ignore - locale exists in runtime but might have type conflicts in this version
+                    locale="es"
                 />
 
                 {/* DEBUG PANEL */}
@@ -235,7 +368,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ whiteboard: initial
                     </div>
                 )}
 
-                {/* SHOW DEBUG TOGGLE (ONLY IF HIDDEN AND INFO EXISTS) */}
+                {/* SHOW DEBUG TOGGLE */}
                 {debugInfo && !showDebug && (
                     <button
                         onClick={() => setShowDebug(true)}

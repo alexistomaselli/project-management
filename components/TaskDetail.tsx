@@ -19,7 +19,9 @@ import {
     Layers,
     Circle,
     Loader2,
-    Trash2
+    Trash2,
+    Plus,
+    Bell
 } from 'lucide-react';
 
 interface TaskDetailProps {
@@ -46,6 +48,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
     const [allProjects, setAllProjects] = React.useState<Project[]>([]);
     const [projectUsers, setProjectUsers] = React.useState<Profile[]>([]);
     const [attachments, setAttachments] = React.useState<IssueAttachment[]>([]);
+    const [taskReminders, setTaskReminders] = React.useState<any[]>([]);
+    const [showReminderForm, setShowReminderForm] = React.useState(false);
+    const [reminderTitle, setReminderTitle] = React.useState('');
+    const [reminderDate, setReminderDate] = React.useState('');
 
     const { showToast } = useVisualFeedback();
 
@@ -140,9 +146,21 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
             setProjectUsers(users);
         };
 
+        const fetchTaskReminders = async () => {
+            if (!task.id) return;
+            const { data } = await supabase
+                .from('reminders')
+                .select('*')
+                .eq('issue_id', task.id)
+                .order('remind_at', { ascending: true });
+
+            if (data) setTaskReminders(data);
+        };
+
         fetchProjects();
         fetchProjectUsers();
         fetchAttachments();
+        fetchTaskReminders();
     }, [task.projectId, task.id]);
 
     const taskComments = comments.filter(c => c.issueId === task.id);
@@ -236,6 +254,54 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
         if (onDelete) {
             await onDelete(task.id);
             onBack();
+        }
+    };
+
+    const handleAddReminder = async () => {
+        if (!reminderTitle || !reminderDate) return;
+        setIsSubmitting(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('No auth user');
+
+            const { error } = await supabase.from('reminders').insert([{
+                user_id: user.id,
+                project_id: task.projectId,
+                issue_id: task.id,
+                title: reminderTitle,
+                description: `Recordatorio para la tarea: ${task.title}`,
+                remind_at: new Date(reminderDate).toISOString(),
+                channels: ['push', 'email']
+            }]);
+
+            if (error) throw error;
+
+            showToast('Recordatorio creado', 'Se ha programado el recordatorio exitosamente.', 'success');
+            setReminderTitle('');
+            setReminderDate('');
+            setShowReminderForm(false);
+
+            // Refresh list
+            const { data } = await supabase
+                .from('reminders')
+                .select('*')
+                .eq('issue_id', task.id)
+                .order('remind_at', { ascending: true });
+            if (data) setTaskReminders(data);
+
+        } catch (error) {
+            console.error('Error adding reminder:', error);
+            showToast('Error', 'No se pudo crear el recordatorio.', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteReminder = async (id: string) => {
+        const { error } = await supabase.from('reminders').delete().eq('id', id);
+        if (!error) {
+            setTaskReminders(prev => prev.filter(r => r.id !== id));
+            showToast('Eliminado', 'Recordatorio eliminado.', 'success');
         }
     };
 
@@ -572,6 +638,80 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, project, comments, activi
                             />
                             <InfoRow icon={<Calendar />} label="Fecha Límite" value={task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Pendiente'} />
                             {project && <InfoRow icon={<Layers />} label="Proyecto" value={project.name} />}
+                        </div>
+                    </div>
+
+                    <div className="glass-card p-8 bg-white border-slate-100">
+                        <div className="flex items-center justify-between mb-6">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Recordatorios</h4>
+                            <button
+                                onClick={() => setShowReminderForm(!showReminderForm)}
+                                className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+
+                        {showReminderForm && (
+                            <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-indigo-100 space-y-3 animate-slide-up">
+                                <input
+                                    type="text"
+                                    placeholder="¿Qué recordar?..."
+                                    value={reminderTitle}
+                                    onChange={(e) => setReminderTitle(e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-400"
+                                />
+                                <input
+                                    type="datetime-local"
+                                    value={reminderDate}
+                                    onChange={(e) => setReminderDate(e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-400"
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleAddReminder}
+                                        disabled={isSubmitting || !reminderTitle || !reminderDate}
+                                        className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        Crear
+                                    </button>
+                                    <button
+                                        onClick={() => setShowReminderForm(false)}
+                                        className="px-3 py-2 text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-3">
+                            {taskReminders.length > 0 ? taskReminders.map((r) => (
+                                <div key={r.id} className="group relative bg-slate-50/50 border border-slate-100 rounded-2xl p-4 transition-all hover:border-indigo-100 hover:bg-white">
+                                    <div className="flex items-start gap-3">
+                                        <div className={`mt-0.5 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${r.is_sent ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 text-indigo-600'}`}>
+                                            <Bell className="w-3 h-3" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-xs font-bold truncate ${r.is_sent ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                                                {r.title}
+                                            </p>
+                                            <div className="flex items-center gap-1.5 mt-1 text-[9px] font-bold text-slate-400">
+                                                <Clock className="w-2.5 h-2.5" />
+                                                {new Date(r.remind_at).toLocaleString()}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteReminder(r.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-500 transition-all"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )) : (
+                                <p className="text-[10px] text-slate-400 italic text-center py-4">Sin recordatorios activos</p>
+                            )}
                         </div>
                     </div>
 

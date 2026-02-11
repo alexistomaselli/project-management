@@ -33,6 +33,7 @@ export interface Profile {
     history: boolean;
     docs: boolean;
     video_calls: boolean;
+    reports: boolean;
   };
 }
 
@@ -128,5 +129,26 @@ export interface ProjectDoc {
   content: string;
   type: DocType;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface Reminder {
+  id: string;
+  userId: string;
+  projectId?: string;
+  issueId?: string;
+  title: string;
+  description?: string;
+  remindAt: string;
+  isSent: boolean;
+  channels: ('email' | 'push' | 'whatsapp')[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformSettings {
+  id: string;
+  key: string;
+  value: any;
   updatedAt: string;
 }
