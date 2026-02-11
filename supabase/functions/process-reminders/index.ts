@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { PushManager } from "jsr:@negrel/webpush@0.1.0";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -134,7 +135,7 @@ serve(async (req) => {
             }
 
             // 2. Web Push Channel
-            if (notification_channels?.push && reminder.channels?.includes('push') && VAPID_PRIVATE_KEY) {
+            if (notification_channels?.push && reminder.channels?.includes('push') && VAPID_PRIVATE_KEY && VAPID_PUBLIC_KEY) {
                 try {
                     // Obtener suscripciones del usuario
                     const { data: subs } = await supabase
@@ -143,17 +144,28 @@ serve(async (req) => {
                         .eq('user_id', reminder.profiles.id);
 
                     if (subs && subs.length > 0) {
+                        const pushManager = new PushManager({
+                            vapid: {
+                                subject: VAPID_SUBJECT,
+                                publicKey: VAPID_PUBLIC_KEY,
+                                privateKey: VAPID_PRIVATE_KEY,
+                            },
+                        });
+
+                        const payload = JSON.stringify({
+                            title: `Recordatorio: ${reminder.title}`,
+                            body: reminder.description || 'Tienes un aviso pendiente.',
+                            url: `/r/${reminder.id}`
+                        });
+
                         for (const sub of subs) {
                             try {
-                                // Enviar vía OneSignal o servicio similar si no queremos implementar toda la firma manual de Web Push
-                                // O usar una API de Web Push. Como no tenemos el SDK de web-push aquí, 
-                                // asumiremos que el usuario usará un servicio como OneSignal o implementaremos un fetch básico.
-                                // Por ahora, registraré el intento en consola para debuguear en el servidor.
                                 console.log(`[Push] Enviando notificación push a usuario ${reminder.profiles.id}`);
-
-                                // Nota: Para Deno real, se usaría fetch con el endpoint del push service con firma JWT adaptada a VAPID.
+                                // La suscripción en DB es el objeto que devuelve pushManager.subscribe()
+                                await pushManager.send(sub.subscription_json, payload);
+                                console.log(`[Push] ✅ Enviado con éxito.`);
                             } catch (pushErr) {
-                                console.error(`Error enviando push:`, pushErr.message);
+                                console.error(`[Push] ❌ Error enviando a suscripción:`, pushErr.message);
                             }
                         }
                         processed = true;
