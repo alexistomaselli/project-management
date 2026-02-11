@@ -36,11 +36,19 @@ const NotificationCenter: React.FC = () => {
     const [reminders, setReminders] = useState<DbReminder[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
-
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+    const [isStandalone, setIsStandalone] = useState(false);
 
     useEffect(() => {
+        // Check if running as PWA
+        const checkStandalone = () => {
+            const isS = window.matchMedia('(display-mode: standalone)').matches ||
+                (window.navigator as any).standalone === true;
+            setIsStandalone(isS);
+        };
+
+        checkStandalone();
         fetchReminders();
         registerServiceWorker();
 
@@ -153,9 +161,11 @@ const NotificationCenter: React.FC = () => {
                 const registration = await navigator.serviceWorker.register('/sw.js');
                 console.log('SW registrado satisfactoriamente:', registration.scope);
 
-                // Verificar si ya está suscrito
-                const subscription = await registration.pushManager.getSubscription();
-                setIsSubscribed(!!subscription);
+                // Verificar si ya está suscrito (Safe check para browsers móviles)
+                if (registration.pushManager) {
+                    const subscription = await registration.pushManager.getSubscription();
+                    setIsSubscribed(!!subscription);
+                }
             } catch (err) {
                 console.error('Fallo al registrar SW:', err);
             }
@@ -163,12 +173,22 @@ const NotificationCenter: React.FC = () => {
     };
 
     const subscribeToPush = async () => {
+        if (!('serviceWorker' in navigator)) return;
+
         setSubscriptionLoading(true);
         try {
             const registration = await navigator.serviceWorker.ready;
+
+            if (!registration.pushManager) {
+                alert('Tu navegador no soporta notificaciones Push o necesitas habilitarlas en los ajustes.');
+                return;
+            }
+
+            const VAPID_PUBLIC_KEY = 'BJGXTQ5BV8hsGQOngNJvqc3nT3epMa1XzDxqZ0g6k9aGQBd-EqFfCJnhetRpp9nBB9xea6SpVQHEeCwnsaqjIzg';
+
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: 'BJGXTQ5BV8hsGQOngNJvqc3nT3epMa1XzDxqZ0g6k9aGQBd-EqFfCJnhetRpp9nBB9xea6SpVQHEeCwnsaqjIzg'
+                applicationServerKey: VAPID_PUBLIC_KEY
             });
 
             // Guardar en Supabase
@@ -271,21 +291,40 @@ const NotificationCenter: React.FC = () => {
 
                             {/* Push Subscription Banner */}
                             {!isSubscribed && (
-                                <div className="px-6 py-4 bg-indigo-600 text-white flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <Smartphone className="w-5 h-5 shrink-0" />
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1 text-indigo-200">Mobile Push</span>
-                                            <span className="text-xs font-bold leading-tight">Activa avisos en tu móvil</span>
+                                <div className="px-6 py-4 bg-indigo-600 text-white">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <Smartphone className="w-5 h-5 shrink-0" />
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black uppercase tracking-widest leading-none mb-1 text-indigo-200">
+                                                    {isStandalone ? 'Mobile Push' : 'Instalación Requerida'}
+                                                </span>
+                                                <span className="text-xs font-bold leading-tight">
+                                                    {isStandalone ? 'Activa avisos en tu móvil' : 'Instala la app para recibir avisos'}
+                                                </span>
+                                            </div>
                                         </div>
+                                        {isStandalone ? (
+                                            <button
+                                                disabled={subscriptionLoading}
+                                                onClick={subscribeToPush}
+                                                className="bg-white text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors shadow-lg active:scale-95 disabled:opacity-50 shrink-0"
+                                            >
+                                                {subscriptionLoading ? '...' : 'Activar'}
+                                            </button>
+                                        ) : (
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className="text-[9px] font-medium text-indigo-100 opacity-80 leading-tight text-right italic">
+                                                    Menu Compartir {' > '} <br /> Añadir a inicio
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <button
-                                        disabled={subscriptionLoading}
-                                        onClick={subscribeToPush}
-                                        className="bg-white text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors shadow-lg active:scale-95 disabled:opacity-50 shrink-0"
-                                    >
-                                        {subscriptionLoading ? '...' : 'Activar'}
-                                    </button>
+                                    {!isStandalone && (
+                                        <div className="mt-3 p-3 bg-white/10 rounded-xl text-[10px] leading-relaxed border border-white/10">
+                                            ⚠️ En iPhone, las notificaciones solo funcionan si añades la app a tu **Pantalla de Inicio** con el botón compartir de Safari.
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
