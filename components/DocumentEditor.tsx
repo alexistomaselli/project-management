@@ -61,6 +61,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
     const [ttsProgress, setTtsProgress] = useState(0);
     const [ttsCurrentTime, setTtsCurrentTime] = useState(0);
     const [ttsDuration, setTtsDuration] = useState(0);
+    const [selectedVoice, setSelectedVoice] = useState<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'>('nova');
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const { showToast } = useVisualFeedback();
@@ -279,7 +280,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                     },
                     body: JSON.stringify({
                         text: plainText.slice(0, 1000), // BALANCE: 1000 characters for good range and speed
-                        voice: 'nova' // 'nova' usually sounds better for Spanish than 'alloy'
+                        voice: selectedVoice
                     })
                 }
             );
@@ -730,6 +731,24 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                         </button>
 
                         <div className={`flex items-center gap-1 p-1 pr-3 rounded-2xl transition-all border ${isTtsPlaying ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-transparent'}`}>
+                            {!isTtsPlaying && !isTtsLoading && (
+                                <div className="flex items-center gap-2 px-2 border-r border-slate-100 mr-1">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Voz:</span>
+                                    <select
+                                        value={selectedVoice}
+                                        onChange={(e) => setSelectedVoice(e.target.value as any)}
+                                        className="bg-transparent text-[10px] font-bold text-slate-600 outline-none cursor-pointer hover:text-indigo-600 transition-colors"
+                                    >
+                                        <option value="nova">Nova (Default)</option>
+                                        <option value="alloy">Alloy</option>
+                                        <option value="echo">Echo</option>
+                                        <option value="fable">Fable</option>
+                                        <option value="onyx">Onyx</option>
+                                        <option value="shimmer">Shimmer</option>
+                                    </select>
+                                </div>
+                            )}
+
                             {isTtsPlaying && (
                                 <>
                                     <button
