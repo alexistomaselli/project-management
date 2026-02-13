@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { ProjectDoc, Profile } from '../types';
 import MediaManager from './MediaManager';
@@ -22,7 +22,13 @@ import {
     Send,
     Calendar,
     Layout as RoadmapIcon,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Volume2,
+    Square,
+    PauseCircle,
+    PlayCircle,
+    SkipBack,
+    SkipForward
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -48,6 +54,14 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
     const [aiPrompt, setAiPrompt] = useState('');
     const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [showMediaManager, setShowMediaManager] = useState(false);
+
+    // TTS State
+    const [isTtsLoading, setIsTtsLoading] = useState(false);
+    const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+    const [ttsProgress, setTtsProgress] = useState(0);
+    const [ttsCurrentTime, setTtsCurrentTime] = useState(0);
+    const [ttsDuration, setTtsDuration] = useState(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const { showToast } = useVisualFeedback();
 
@@ -222,6 +236,148 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
             setIsAiGenerating(false);
         }
     };
+
+    const handleTtsToggle = async () => {
+        if (isTtsPlaying) {
+            audioRef.current?.pause();
+            setIsTtsPlaying(false);
+            return;
+        }
+
+        if (audioRef.current && audioRef.current.paused && audioRef.current.src) {
+            audioRef.current.play();
+            setIsTtsPlaying(true);
+            return;
+        }
+
+        // Start new TTS
+        if (!content.trim()) return;
+
+        setIsTtsLoading(true);
+        showToast('IA Generando Voz', 'Preparando lectura con voz humana...', 'info');
+
+        try {
+            // Remove markdown syntax for cleaner reading
+            const plainText = content
+                .replace(/[#*`_~]/g, '') // Remove headlines, bold, code, etc.
+                .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Keep link text, remove URL
+                .trim();
+
+            console.log('Calling text-to-speech function via fetch...');
+            const startTime = Date.now();
+
+            // Get the session to use the access token
+            const { data: { session } } = await supabase.auth.getSession();
+
+            const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    },
+                    body: JSON.stringify({
+                        text: plainText.slice(0, 1000), // BALANCE: 1000 characters for good range and speed
+                        voice: 'nova' // 'nova' usually sounds better for Spanish than 'alloy'
+                    })
+                }
+            );
+
+            console.log(`TTS Fetch finished in ${Date.now() - startTime}ms. Status: ${response.status}`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`TTS Function Error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.arrayBuffer();
+            console.log('TTS response received, buffer size:', data.byteLength);
+
+            const blob = new Blob([data], { type: 'audio/mpeg' });
+            console.log('Blob created, size:', blob.size);
+            const url = URL.createObjectURL(blob);
+
+            if (audioRef.current) {
+                audioRef.current.src = url;
+            } else {
+                audioRef.current = new Audio(url);
+            }
+
+            audioRef.current.ontimeupdate = () => {
+                if (audioRef.current) {
+                    setTtsCurrentTime(audioRef.current.currentTime);
+                    setTtsProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+                }
+            };
+
+            audioRef.current.onloadedmetadata = () => {
+                if (audioRef.current) {
+                    setTtsDuration(audioRef.current.duration);
+                }
+            };
+
+            audioRef.current.onended = () => {
+                console.log('Audio playback ended');
+                setIsTtsPlaying(false);
+                setTtsProgress(0);
+                setTtsCurrentTime(0);
+            };
+
+            console.log('Attempting to play audio...');
+            await audioRef.current.play();
+            console.log('Audio playing successfully');
+            setIsTtsPlaying(true);
+            showToast('Lectura Iniciada', 'Escuchando documento...', 'success');
+        } catch (err: any) {
+            console.error('Error in TTS:', err);
+            showToast('Error de Voz', 'No se pudo generar la lectura.', 'error');
+        } finally {
+            setIsTtsLoading(false);
+        }
+    };
+
+    const handleTtsSkip = (seconds: number) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = Math.max(0, Math.min(audioRef.current.duration, audioRef.current.currentTime + seconds));
+            setTtsCurrentTime(audioRef.current.currentTime);
+            setTtsProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+        }
+    };
+
+    const handleTtsSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const percent = parseFloat(e.target.value);
+        if (audioRef.current && audioRef.current.duration) {
+            const newTime = (percent / 100) * audioRef.current.duration;
+            audioRef.current.currentTime = newTime;
+            setTtsProgress(percent);
+            setTtsCurrentTime(newTime);
+        }
+    };
+
+    const formatTtsTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleTtsStop = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+        setIsTtsPlaying(false);
+    };
+
+    // Cleanup audio on unmount
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, []);
 
     const handleAiDiagram = async () => {
         if (!profile?.id) return;
@@ -573,6 +729,75 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                             <span>Galería</span>
                         </button>
 
+                        <div className={`flex items-center gap-1 p-1 pr-3 rounded-2xl transition-all border ${isTtsPlaying ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-transparent'}`}>
+                            {isTtsPlaying && (
+                                <>
+                                    <button
+                                        onClick={() => handleTtsSkip(-5)}
+                                        className="p-2 hover:bg-white rounded-xl text-indigo-400 transitioning active:scale-95"
+                                        title="Retroceder 5 segundos"
+                                    >
+                                        <SkipBack className="w-3.5 h-3.5" />
+                                    </button>
+                                </>
+                            )}
+
+                            <button
+                                onClick={handleTtsToggle}
+                                disabled={isTtsLoading}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border disabled:opacity-50 ${isTtsPlaying
+                                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-100'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                            >
+                                {isTtsLoading ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : isTtsPlaying ? (
+                                    <PauseCircle className="w-3.5 h-3.5" />
+                                ) : (
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                )}
+                                <span>{isTtsPlaying ? 'Cerrar' : 'Leer'}</span>
+                            </button>
+
+                            {isTtsPlaying && (
+                                <>
+                                    <button
+                                        onClick={() => handleTtsSkip(5)}
+                                        className="p-2 hover:bg-white rounded-xl text-indigo-400 transitioning active:scale-95"
+                                        title="Adelantar 5 segundos"
+                                    >
+                                        <SkipForward className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <div className="h-4 w-[1px] bg-indigo-200 mx-1" />
+
+                                    <div className="flex flex-col gap-1 min-w-[120px] px-2">
+                                        <div className="flex justify-between text-[8px] font-black text-indigo-400 uppercase tracking-tighter">
+                                            <span>{formatTtsTime(ttsCurrentTime)}</span>
+                                            <span>{formatTtsTime(ttsDuration)}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={ttsProgress}
+                                            onChange={handleTtsSeek}
+                                            className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={handleTtsStop}
+                                        className="p-2 hover:bg-red-50 rounded-xl text-red-400 transitioning active:scale-95 ml-1"
+                                        title="Detener Lectura"
+                                    >
+                                        <Square className="w-3.5 h-3.5 fill-current" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
                         <button
                             onClick={handleAiDiagram}
                             disabled={isAiGenerating}
@@ -613,9 +838,10 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
             {/* Editor Area */}
             <div className="flex-1 flex overflow-hidden bg-slate-50 print:block print:overflow-visible print:bg-white">
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="popLayout">
                     {(mode === 'editor' || mode === 'split') && (
                         <motion.div
+                            key="editor-pane"
                             initial={{ x: -20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             exit={{ x: -20, opacity: 0 }}
@@ -640,6 +866,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                                 <AnimatePresence>
                                     {showAiPrompt && (
                                         <motion.div
+                                            key="ai-prompt-area"
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
@@ -681,6 +908,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
                     {(mode === 'preview' || mode === 'split') && (
                         <motion.div
+                            key="preview-pane"
                             id="printable-content"
                             initial={{ x: 20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
@@ -791,6 +1019,47 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                     }}
                 />
             )}
+
+            {/* TTS Control Overlay */}
+            <AnimatePresence>
+                {isTtsPlaying && (
+                    <motion.div
+                        key="tts-overlay"
+                        initial={{ opacity: 0, y: 50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 50 }}
+                        className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[300] bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-[2rem] flex items-center gap-6 shadow-2xl shadow-indigo-500/20"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center">
+                                <Volume2 className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none">Lectura en curso</h4>
+                                <p className="text-white text-xs font-bold mt-1 truncate max-w-[150px]">{title}</p>
+                            </div>
+                        </div>
+
+                        <div className="h-8 w-[1px] bg-white/10" />
+
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleTtsToggle}
+                                className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center transition-all"
+                            >
+                                <PauseCircle className="w-6 h-6" />
+                            </button>
+                            <button
+                                onClick={handleTtsStop}
+                                className="w-10 h-10 bg-white/10 hover:bg-rose-500/20 text-rose-500 rounded-xl flex items-center justify-center transition-all"
+                                title="Detener"
+                            >
+                                <Square className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };
