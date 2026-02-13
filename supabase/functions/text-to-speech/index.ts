@@ -21,7 +21,7 @@ serve(async (req) => {
 
         const body = await req.json();
         console.log('Request body:', JSON.stringify(body));
-        const { text, voice = 'alloy', speed = 1.0 } = body;
+        const { text, voice = 'alloy', speed = 1.0, documentId, force = false } = body;
 
         if (!text) {
             return new Response(JSON.stringify({ error: 'Text is required' }), {
@@ -30,33 +30,59 @@ serve(async (req) => {
             });
         }
 
-        // Generate a cache key based on text, voice, and speed
-        const inputStr = `${text}_${voice}_${speed}`;
-        const encoder = new TextEncoder();
-        const data = encoder.encode(inputStr);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const cacheKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        const fileName = `${cacheKey}.mp3`;
+        // Use documentId for structured storage, fallback to hash if not provided
+        let fileName;
+        if (documentId) {
+            fileName = `${documentId}/${voice}.mp3`;
+        } else {
+            // Generate a cache key based on text, voice, and speed
+            const inputStr = `${text}_${voice}_${speed}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(inputStr);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const cacheKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            fileName = `temp/${cacheKey}.mp3`;
+        }
 
         console.log('Checking cache for:', fileName);
 
-        // Check if the file already exists in storage
-        const { data: existingFile, error: storageError } = await supabaseClient
-            .storage
-            .from('document-audio')
-            .download(fileName);
+        const publicUrl = supabaseClient.storage.from('document-audio').getPublicUrl(fileName).data.publicUrl;
 
-        if (existingFile && !storageError) {
-            console.log('Cache hit! Returning stored audio.');
-            console.timeEnd('total-execution');
-            return new Response(existingFile, {
-                headers: {
-                    ...corsHeaders,
-                    'Content-Type': 'audio/mpeg',
-                    'X-Cache': 'HIT'
-                },
-            });
+        // Skip cache check if force is true
+        if (!force) {
+            // Check if the file already exists in storage
+            const { data: fileExists } = await supabaseClient
+                .storage
+                .from('document-audio')
+                .list(documentId ? `${documentId}` : 'temp', {
+                    search: fileName.split('/').pop()
+                });
+
+            if (fileExists && fileExists.length > 0) {
+                console.log('Cache hit! Returning stored audio URL.');
+
+                // Ensure the database record has the audio_url and update generating timestamp
+                if (documentId) {
+                    await supabaseClient
+                        .from('project_docs')
+                        .update({
+                            audio_url: publicUrl,
+                            audio_generated_at: new Date().toISOString()
+                        })
+                        .eq('id', documentId);
+                }
+
+                console.timeEnd('total-execution');
+                return new Response(JSON.stringify({ publicUrl, cache: 'HIT' }), {
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                    },
+                });
+            }
+        } else {
+            console.log('Force regeneration requested. Skipping cache check.');
         }
 
         console.log('Cache miss. Fetching from OpenAI...');
@@ -103,25 +129,41 @@ serve(async (req) => {
 
         const audioBuffer = await response.arrayBuffer();
 
-        // Upload to storage for future use (fire and forget slightly but await for safety)
-        console.log('Caching audio to storage...');
+        // Upload to storage for future use
+        console.log('Caching audio to storage:', fileName);
         const { error: uploadError } = await supabaseClient
             .storage
             .from('document-audio')
             .upload(fileName, audioBuffer, {
                 contentType: 'audio/mpeg',
-                cacheControl: '3600'
+                cacheControl: '3600',
+                upsert: true
             });
 
         if (uploadError) {
             console.error('Failed to cache audio:', uploadError);
         }
 
-        return new Response(audioBuffer, {
+        // Update project_docs with the new audio_url if documentId is provided
+        if (documentId) {
+            console.log('Updating project_docs with audio_url and timestamp for:', documentId);
+            const { error: dbError } = await supabaseClient
+                .from('project_docs')
+                .update({
+                    audio_url: publicUrl,
+                    audio_generated_at: new Date().toISOString()
+                })
+                .eq('id', documentId);
+
+            if (dbError) {
+                console.error('Failed to update project_docs with audio_url:', dbError);
+            }
+        }
+
+        return new Response(JSON.stringify({ publicUrl, cache: 'MISS' }), {
             headers: {
                 ...corsHeaders,
-                'Content-Type': 'audio/mpeg',
-                'X-Cache': 'MISS'
+                'Content-Type': 'application/json',
             },
         });
 

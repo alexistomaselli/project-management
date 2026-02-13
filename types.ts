@@ -130,6 +130,8 @@ export interface ProjectDoc {
   type: DocType;
   createdAt: string;
   updatedAt: string;
+  audio_url?: string;
+  audio_generated_at?: string;
 }
 
 export interface Reminder {

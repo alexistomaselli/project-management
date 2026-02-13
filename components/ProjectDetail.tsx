@@ -417,15 +417,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             </div>
 
             {/* Hero Card */}
-            <div className="glass-card p-10 bg-white border-slate-100 overflow-hidden relative">
+            <div className="glass-card p-6 md:p-10 bg-white border-slate-100 overflow-hidden relative">
                 <div className="absolute top-0 right-0 p-10 opacity-[0.03] pointer-events-none">
                     <Layers className="w-64 h-64 -rotate-12" />
                 </div>
 
                 <div className="relative z-10">
-                    <div className="flex items-start gap-6 mb-8">
-                        <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-200">
-                            <Layers className="w-10 h-10" />
+                    <div className="flex flex-col sm:flex-row items-start gap-6 mb-8">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-600 rounded-2xl sm:rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-200 shrink-0">
+                            <Layers className="w-8 h-8 sm:w-10 sm:h-10" />
                         </div>
                         <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
@@ -453,7 +453,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-8 pt-8 border-t border-slate-50">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 pt-8 border-t border-slate-50">
                         <StatItem icon={<Calendar />} label="Actualizado" value={new Date(project.updated_at).toLocaleDateString()} />
                         <StatItem icon={<CheckCircle2 />} label="Tareas Completas" value={`${projectTasks.filter(t => t.status === 'done').length}/${projectTasks.length}`} />
                         <StatItem icon={<Users />} label="Equipo" value="3 Miembros" />
@@ -477,28 +477,28 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             <div className="grid grid-cols-12 gap-10">
                 <div className="col-span-12">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 mb-8">
-                        <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-6 md:gap-8 overflow-x-auto no-scrollbar scroll-smooth -mb-px">
                             <button
                                 onClick={() => setActiveTab('tasks')}
-                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'tasks' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'tasks' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 Tareas & Tickets
                             </button>
                             <button
                                 onClick={() => setActiveTab('history')}
-                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'history' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'history' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 Historial de Desarrollo
                             </button>
                             <button
                                 onClick={() => setActiveTab('roadmap')}
-                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'roadmap' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'roadmap' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 Hoja de Ruta (Timeline)
                             </button>
                             <button
                                 onClick={() => setActiveTab('whiteboard')}
-                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'whiteboard' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'whiteboard' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 <div className="flex items-center gap-2">
                                     <Palette className="w-4 h-4" />
@@ -507,7 +507,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                             </button>
                             <button
                                 onClick={() => setActiveTab('docs')}
-                                className={`pb-4 border-b-2 font-bold text-sm transition-all ${activeTab === 'docs' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                                className={`pb-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'docs' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                             >
                                 <div className="flex items-center gap-2">
                                     <FileText className="w-4 h-4" />

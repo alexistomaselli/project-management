@@ -28,7 +28,12 @@ import {
     PauseCircle,
     PlayCircle,
     SkipBack,
-    SkipForward
+    SkipForward,
+    Download,
+    Copy,
+    Trash2,
+    RefreshCw,
+    AlertCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -61,6 +66,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
     const [ttsProgress, setTtsProgress] = useState(0);
     const [ttsCurrentTime, setTtsCurrentTime] = useState(0);
     const [ttsDuration, setTtsDuration] = useState(0);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [selectedVoice, setSelectedVoice] = useState<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'>('nova');
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -238,7 +244,8 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
         }
     };
 
-    const handleTtsToggle = async () => {
+    const handleTtsToggle = async (forceRequested = false) => {
+        if (!doc) return;
         if (isTtsPlaying) {
             audioRef.current?.pause();
             setIsTtsPlaying(false);
@@ -279,8 +286,10 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                         'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                     },
                     body: JSON.stringify({
-                        text: plainText.slice(0, 1000), // BALANCE: 1000 characters for good range and speed
-                        voice: selectedVoice
+                        text: plainText.slice(0, 4001),
+                        voice: selectedVoice,
+                        documentId: doc.id,
+                        force: forceRequested // Only force on explicit request
                     })
                 }
             );
@@ -289,20 +298,27 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`TTS Function Error: ${response.status} - ${errorText}`);
+                throw new Error(`TTS Error: ${response.status} - ${errorText}`);
             }
 
-            const data = await response.arrayBuffer();
-            console.log('TTS response received, buffer size:', data.byteLength);
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseErr) {
+                const text = await response.text();
+                console.error('Failed to parse TTS JSON response. Response text first 100 chars:', text.slice(0, 100));
+                throw new Error('La respuesta del servidor no es un JSON válido.');
+            }
 
-            const blob = new Blob([data], { type: 'audio/mpeg' });
-            console.log('Blob created, size:', blob.size);
-            const url = URL.createObjectURL(blob);
+            const { publicUrl } = data;
+            console.log('TTS response received, publicUrl:', publicUrl);
 
             if (audioRef.current) {
-                audioRef.current.src = url;
+                audioRef.current.src = publicUrl;
+                audioRef.current.playbackRate = playbackSpeed;
             } else {
-                audioRef.current = new Audio(url);
+                audioRef.current = new Audio(publicUrl);
+                audioRef.current.playbackRate = playbackSpeed;
             }
 
             audioRef.current.ontimeupdate = () => {
@@ -319,7 +335,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
             };
 
             audioRef.current.onended = () => {
-                console.log('Audio playback ended');
                 setIsTtsPlaying(false);
                 setTtsProgress(0);
                 setTtsCurrentTime(0);
@@ -327,7 +342,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
             console.log('Attempting to play audio...');
             await audioRef.current.play();
-            console.log('Audio playing successfully');
             setIsTtsPlaying(true);
             showToast('Lectura Iniciada', 'Escuchando documento...', 'success');
         } catch (err: any) {
@@ -353,6 +367,23 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
             audioRef.current.currentTime = newTime;
             setTtsProgress(percent);
             setTtsCurrentTime(newTime);
+        }
+    };
+
+    const handleTtsSpeedChange = (speed: number) => {
+        setPlaybackSpeed(speed);
+        if (audioRef.current) {
+            audioRef.current.playbackRate = speed;
+        }
+    };
+
+    const handleTtsDownload = () => {
+        if (audioRef.current?.src) {
+            const a = document.createElement('a');
+            a.href = audioRef.current.src;
+            a.download = `${title.replace(/\s+/g, '_')}_audio.mp3`;
+            a.click();
+            showToast('Descargando', 'El archivo MP3 se está descargando...', 'info');
         }
     };
 
@@ -739,7 +770,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                                         onChange={(e) => setSelectedVoice(e.target.value as any)}
                                         className="bg-transparent text-[10px] font-bold text-slate-600 outline-none cursor-pointer hover:text-indigo-600 transition-colors"
                                     >
-                                        <option value="nova">Nova (Default)</option>
+                                        <option value="nova">Nova</option>
                                         <option value="alloy">Alloy</option>
                                         <option value="echo">Echo</option>
                                         <option value="fable">Fable</option>
@@ -762,7 +793,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                             )}
 
                             <button
-                                onClick={handleTtsToggle}
+                                onClick={() => handleTtsToggle()}
                                 disabled={isTtsLoading}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border disabled:opacity-50 ${isTtsPlaying
                                     ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-100'
@@ -771,13 +802,28 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                             >
                                 {isTtsLoading ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : isTtsPlaying ? (
-                                    <PauseCircle className="w-3.5 h-3.5" />
                                 ) : (
-                                    <Volume2 className="w-3.5 h-3.5" />
+                                    <>
+                                        {isTtsPlaying ? <PauseCircle className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                        <span>{isTtsPlaying ? 'Cerrar' : 'Leer'}</span>
+                                        {doc.audio_url && doc.audio_generated_at && new Date(doc.updatedAt) > new Date(doc.audio_generated_at) && (
+                                            <span title="Contenido desactualizado">
+                                                <AlertCircle className="w-3 h-3 text-amber-500 ml-1" />
+                                            </span>
+                                        )}
+                                    </>
                                 )}
-                                <span>{isTtsPlaying ? 'Cerrar' : 'Leer'}</span>
                             </button>
+
+                            {!isTtsPlaying && !isTtsLoading && (
+                                <button
+                                    onClick={() => handleTtsToggle(true)}
+                                    className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-all active:scale-95 border border-transparent hover:border-slate-100"
+                                    title="Regenerar Audio (IA)"
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                            )}
 
                             {isTtsPlaying && (
                                 <>
@@ -791,7 +837,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
                                     <div className="h-4 w-[1px] bg-indigo-200 mx-1" />
 
-                                    <div className="flex flex-col gap-1 min-w-[120px] px-2">
+                                    <div className="flex flex-col gap-1 min-w-[120px] px-2 border-l border-slate-200 ml-1">
                                         <div className="flex justify-between text-[8px] font-black text-indigo-400 uppercase tracking-tighter">
                                             <span>{formatTtsTime(ttsCurrentTime)}</span>
                                             <span>{formatTtsTime(ttsDuration)}</span>
@@ -805,6 +851,28 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                                             className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                         />
                                     </div>
+
+                                    <div className="flex items-center gap-1 border-l border-indigo-200 pl-2 ml-1">
+                                        <select
+                                            value={playbackSpeed}
+                                            onChange={(e) => handleTtsSpeedChange(parseFloat(e.target.value))}
+                                            className="bg-transparent text-[10px] font-bold text-indigo-600 outline-none cursor-pointer hover:bg-white rounded p-1"
+                                            title="Velocidad de reproducción"
+                                        >
+                                            <option value="1">1x</option>
+                                            <option value="1.25">1.25x</option>
+                                            <option value="1.5">1.5x</option>
+                                            <option value="2">2x</option>
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        onClick={handleTtsDownload}
+                                        className="p-1.5 hover:bg-white rounded-xl text-indigo-400 transition-all active:scale-95"
+                                        title="Descargar MP3"
+                                    >
+                                        <Download className="w-3.5 h-3.5" />
+                                    </button>
 
                                     <button
                                         onClick={handleTtsStop}
@@ -1027,17 +1095,19 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                 }
             ` }} />
 
-            {showMediaManager && (
-                <MediaManager
-                    projectId={doc.projectId}
-                    onClose={() => setShowMediaManager(false)}
-                    onSelectImage={(markdown) => {
-                        setContent(prev => prev + '\n\n' + markdown + '\n\n');
-                        setShowMediaManager(false);
-                        showToast('Imagen Insertada', 'Se ha agregado al final del documento.', 'success');
-                    }}
-                />
-            )}
+            {
+                showMediaManager && (
+                    <MediaManager
+                        projectId={doc.projectId}
+                        onClose={() => setShowMediaManager(false)}
+                        onSelectImage={(markdown) => {
+                            setContent(prev => prev + '\n\n' + markdown + '\n\n');
+                            setShowMediaManager(false);
+                            showToast('Imagen Insertada', 'Se ha agregado al final del documento.', 'success');
+                        }}
+                    />
+                )
+            }
 
             {/* TTS Control Overlay */}
             <AnimatePresence>
@@ -1063,7 +1133,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
 
                         <div className="flex items-center gap-3">
                             <button
-                                onClick={handleTtsToggle}
+                                onClick={() => handleTtsToggle()}
                                 className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center transition-all"
                             >
                                 <PauseCircle className="w-6 h-6" />
@@ -1079,7 +1149,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ doc, onBack, onSaveSucc
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </motion.div >
     );
 };
 

@@ -13,7 +13,12 @@ import {
     ExternalLink,
     FileType,
     Calendar,
-    Upload
+    Upload,
+    Play,
+    Pause,
+    Volume2,
+    AlertCircle,
+    X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVisualFeedback } from '../context/VisualFeedbackContext';
@@ -34,6 +39,11 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
     const [isCreating, setIsCreating] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [playingDocId, setPlayingDocId] = useState<string | null>(null);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const audioRefList = useRef<HTMLAudioElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { showToast, confirmAction } = useVisualFeedback();
@@ -60,7 +70,9 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
                 content: d.content || '',
                 type: d.type as DocType,
                 createdAt: d.created_at,
-                updatedAt: d.updated_at
+                updatedAt: d.updated_at,
+                audio_url: d.audio_url,
+                audio_generated_at: d.audio_generated_at
             })));
         } catch (error) {
             console.error('Error fetching docs:', error);
@@ -235,6 +247,79 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
         doc.type.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const handleQuickPlay = (e: React.MouseEvent, doc: ProjectDoc) => {
+        e.stopPropagation();
+
+        if (playingDocId === doc.id) {
+            if (audioRefList.current?.paused) {
+                audioRefList.current.play();
+            } else {
+                audioRefList.current?.pause();
+            }
+            return;
+        }
+
+        if (audioRefList.current) {
+            audioRefList.current.pause();
+            audioRefList.current.ontimeupdate = null;
+            audioRefList.current.onloadedmetadata = null;
+        }
+
+        if (doc.audio_url) {
+            if (!audioRefList.current) {
+                audioRefList.current = new Audio(doc.audio_url);
+            } else {
+                audioRefList.current.src = doc.audio_url;
+            }
+
+            audioRefList.current.playbackRate = playbackSpeed;
+            audioRefList.current.onended = () => {
+                setPlayingDocId(null);
+                setCurrentTime(0);
+            };
+
+            audioRefList.current.ontimeupdate = () => {
+                if (audioRefList.current) {
+                    setCurrentTime(audioRefList.current.currentTime);
+                }
+            };
+
+            audioRefList.current.onloadedmetadata = () => {
+                if (audioRefList.current) {
+                    setDuration(audioRefList.current.duration);
+                }
+            };
+
+            audioRefList.current.play();
+            setPlayingDocId(doc.id);
+        }
+    };
+
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const time = parseFloat(e.target.value);
+        if (audioRefList.current) {
+            audioRefList.current.currentTime = time;
+            setCurrentTime(time);
+        }
+    };
+
+    const togglePlaybackSpeed = () => {
+        const speeds = [1, 1.5, 2];
+        const nextSpeed = speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
+        setPlaybackSpeed(nextSpeed);
+        if (audioRefList.current) {
+            audioRefList.current.playbackRate = nextSpeed;
+        }
+    };
+
+    const formatTime = (time: number) => {
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const playingDoc = docs.find(d => d.id === playingDocId);
+
     return (
         <div className="space-y-8">
             <input
@@ -317,6 +402,26 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
+                                    {doc.audio_url && (
+                                        <button
+                                            onClick={(e) => handleQuickPlay(e, doc)}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all shadow-sm ${playingDocId === doc.id
+                                                ? 'bg-indigo-600 text-white animate-pulse'
+                                                : 'bg-white border border-slate-100 text-indigo-600 hover:bg-indigo-50'
+                                                }`}
+                                            title={playingDocId === doc.id ? 'Pausar' : 'Reproducir Audio'}
+                                        >
+                                            {playingDocId === doc.id && !audioRefList.current?.paused ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+                                        </button>
+                                    )}
+                                    {doc.audio_url && doc.audio_generated_at && new Date(doc.updatedAt) > new Date(doc.audio_generated_at) && (
+                                        <div
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white rounded-full flex items-center justify-center shadow-sm"
+                                            title="El texto ha cambiado desde la última generación audio"
+                                        >
+                                            <AlertCircle className="w-2.5 h-2.5" />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -351,12 +456,91 @@ const DocumentList: React.FC<DocumentListProps> = ({ projectId, onSelectDoc }) =
 
                             <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between text-slate-300 font-black text-[9px] uppercase tracking-widest group-hover:text-indigo-400">
                                 <span>Ver Contenido</span>
-                                <ExternalLink className="w-3 h-3" />
+                                <div className="flex items-center gap-4">
+                                    {doc.audio_url && <Volume2 className={`w-3 h-3 ${playingDocId === doc.id ? 'text-indigo-600 animate-bounce' : 'text-slate-300'}`} />}
+                                    <ExternalLink className="w-3 h-3" />
+                                </div>
                             </div>
                         </motion.div>
                     ))}
                 </div>
             )}
+
+            {/* Floating Player */}
+            <AnimatePresence>
+                {playingDocId && playingDoc && (
+                    <motion.div
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-2xl"
+                    >
+                        <div className="bg-white/80 backdrop-blur-2xl border border-white/50 shadow-2xl rounded-[2.5rem] p-4 md:p-6 flex flex-col md:flex-row items-center gap-4 md:gap-8">
+                            {/* Doc Info */}
+                            <div className="flex items-center gap-4 w-full md:w-auto overflow-hidden">
+                                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-200">
+                                    <Volume2 className="w-6 h-6 animate-pulse" />
+                                </div>
+                                <div className="overflow-hidden">
+                                    <h4 className="text-sm font-black text-slate-900 truncate tracking-tight">{playingDoc.title}</h4>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">Reproduciendo Documento</p>
+                                </div>
+                            </div>
+
+                            {/* Main Controls */}
+                            <div className="flex-1 flex flex-col gap-2 w-full">
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (audioRefList.current?.paused) audioRefList.current.play();
+                                            else audioRefList.current?.pause();
+                                            // Force state refresh if needed, but listeners should handle it
+                                            setDocs([...docs]);
+                                        }}
+                                        className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-slate-200"
+                                    >
+                                        {audioRefList.current?.paused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5" />}
+                                    </button>
+
+                                    <div className="flex-1 flex flex-col gap-1">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max={duration || 0}
+                                            value={currentTime}
+                                            onChange={handleSeek}
+                                            className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                                        />
+                                        <div className="flex justify-between text-[10px] font-black text-slate-400 tabular-nums">
+                                            <span>{formatTime(currentTime)}</span>
+                                            <span>{formatTime(duration)}</span>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={togglePlaybackSpeed}
+                                        className="w-12 h-10 border-2 border-slate-100 rounded-xl flex items-center justify-center text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-all font-mono"
+                                    >
+                                        {playbackSpeed}x
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Close */}
+                            <button
+                                onClick={() => {
+                                    audioRefList.current?.pause();
+                                    setPlayingDocId(null);
+                                }}
+                                className="w-12 h-12 flex items-center justify-center rounded-2xl hover:bg-rose-50 text-slate-300 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group"
+                            >
+                                <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Create Modal */}
             <AnimatePresence>
